@@ -231,7 +231,7 @@ const Header: React.FC = () => {
                 </div>
               </>
             ) : (
-              /* Single Sign In button — the only auth trigger in the header */
+              /* Single Sign In button - the only auth trigger in the header */
               <button
                 onClick={handleSignIn}
                 className="px-6 py-2.5 bg-gradient-to-r from-gold-light via-gold to-gold-dark font-medium text-xs uppercase tracking-[0.15em] rounded-lg hover:shadow-lg hover:shadow-gold/20 transition-all duration-300"

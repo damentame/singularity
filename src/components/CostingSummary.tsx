@@ -114,7 +114,7 @@ const CostingSummary: React.FC<CostingSummaryProps> = ({ summary, itemCount, gue
 
           {staged.refundableDeposit > 0 && (
             <div className="flex justify-between items-baseline">
-              <span className="text-[10px] text-gray-400 pl-2">Refundable Deposit (10% Dry-Hire) — No {staged.vatName}</span>
+              <span className="text-[10px] text-gray-400 pl-2">Refundable Deposit (10% Dry-Hire) - No {staged.vatName}</span>
               <span className="text-xs text-gray-500">{fmt(staged.refundableDeposit)}</span>
             </div>
           )}

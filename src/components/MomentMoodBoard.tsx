@@ -131,7 +131,7 @@ const MomentMoodBoard: React.FC<MomentMoodBoardProps> = ({
       setShowPrompt(false);
       toast({
         title: 'Placeholder Added',
-        description: 'AI generation is currently unavailable. A placeholder image was added — you can replace it with an upload.',
+        description: 'AI generation is currently unavailable. A placeholder image was added - you can replace it with an upload.',
       });
     } finally {
       setIsGenerating(false);

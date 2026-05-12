@@ -314,7 +314,7 @@ const SupplierPortal: React.FC = () => {
               <div>
                 <div className="flex items-center gap-2">
                   <h1 className="text-sm font-bold" style={{ color: '#1A1A1A' }}>
-                    Quote Request — {event.jobCode || 'RFQ'}
+                    Quote Request - {event.jobCode || 'RFQ'}
                   </h1>
                   <span
                     className="text-[9px] font-semibold px-2.5 py-0.5 rounded-full text-white"
@@ -572,7 +572,7 @@ const SupplierPortal: React.FC = () => {
                   <p className="text-xs text-gray-500">
                     <span className="font-semibold" style={{ color: GOLD }}>Click to upload</span> or drag and drop
                   </p>
-                  <p className="text-[10px] text-gray-400 mt-1">PDF, images, spreadsheets — up to 10MB per file</p>
+                  <p className="text-[10px] text-gray-400 mt-1">PDF, images, spreadsheets - up to 10MB per file</p>
                 </>
               )}
             </div>
@@ -629,7 +629,7 @@ const SupplierPortal: React.FC = () => {
             <span className="text-xs font-semibold text-blue-700 block">Automatic Price Mapping</span>
             <p className="text-[10px] text-blue-600 mt-0.5 leading-relaxed">
               When you submit your quote, your pricing is automatically mapped back to each line item in the event costing using secure reference IDs. 
-              The coordinator's event budget updates in real-time — no manual re-entry required.
+              The coordinator's event budget updates in real-time - no manual re-entry required.
             </p>
           </div>
         </div>

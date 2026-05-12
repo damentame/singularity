@@ -385,7 +385,7 @@ const InlineCelebrationPicker: React.FC<InlineCelebrationPickerProps> = ({ onSel
                       {cat.name}
                     </h3>
                     <p className="text-white/40 text-sm mt-1" style={{ fontFamily: '"Inter", sans-serif' }}>
-                      {cat.types.length} celebration types — tap to select
+                      {cat.types.length} celebration types - tap to select
                     </p>
                   </div>
                 </div>

@@ -54,7 +54,7 @@ const RoleSelector: React.FC = () => {
       return;
     }
 
-    // Not authenticated — open auth modal with role pre-selected
+    // Not authenticated - open auth modal with role pre-selected
     setPreselectedRole(roleId as 'host' | 'supplier' | 'coordinator');
     setAuthMode('signup');
     setShowAuthModal(true);

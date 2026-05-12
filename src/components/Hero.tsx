@@ -24,7 +24,7 @@ const Hero: React.FC = () => {
   const handleRoleSelect = (roleId: string) => {
     setSelectedRole(roleId);
 
-    // If already authenticated, route directly — no auth modal
+    // If already authenticated, route directly - no auth modal
     if (isAuthenticated) {
       routeToRoleDashboard(roleId);
       return;
@@ -274,7 +274,7 @@ const Hero: React.FC = () => {
             })}
           </div>
 
-          {/* Continue as Guest — only show when NOT authenticated */}
+          {/* Continue as Guest - only show when NOT authenticated */}
           {!isAuthenticated && (
             <div className="text-center mt-10">
               <button
@@ -296,7 +296,7 @@ const Hero: React.FC = () => {
           </div>
         </div>
 
-        {/* STEP 2: What Type of Celebration? — Only for Hosts */}
+        {/* STEP 2: What Type of Celebration? - Only for Hosts */}
         <div 
           ref={eventTypeSectionRef}
           className={`mb-24 transition-all duration-700 ${

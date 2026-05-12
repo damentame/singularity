@@ -779,7 +779,7 @@ export const getMarginOnConfirmed = (proposalTotal: number, confirmedSpend: numb
 export const getEventDisplayName = (event: PlannerEvent): string => {
   if (event.companyName) {
     const parts = [event.companyName, event.divisionName, event.eventTitle].filter(Boolean);
-    if (parts.length > 1) return parts.join(' — ');
+    if (parts.length > 1) return parts.join(' - ');
     if (parts.length === 1) return parts[0];
   }
   return event.name || 'Untitled Event';
@@ -1588,7 +1588,7 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       id: listId,
       eventId,
       programId: '',
-      listName: `Shopping List — ${so.orderNumber}`,
+      listName: `Shopping List - ${so.orderNumber}`,
       status: 'DRAFT',
       supplierName: '',
       currency: 'ZAR',

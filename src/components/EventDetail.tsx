@@ -108,7 +108,7 @@ const EventDetail: React.FC<EventDetailProps> = ({ eventId, onBack, onGeneratePr
     toast({ title: 'Version Saved', description: `Version ${event.currentVersion + 1} saved.` });
   };
 
-  // "Hire My Supplier" — now assigns supplier to line item instead of sending immediately
+  // "Hire My Supplier" - now assigns supplier to line item instead of sending immediately
   const handleHireSupplier = (lineItemId: string) => {
     setRfqTarget(lineItemId);
     setRfqName('');
@@ -231,7 +231,7 @@ const EventDetail: React.FC<EventDetailProps> = ({ eventId, onBack, onGeneratePr
                       {pendingAssignments.length} item{pendingAssignments.length !== 1 ? 's' : ''} ready for quoting
                     </h3>
                     <p className="text-[10px] text-gray-400 mt-0.5">
-                      {pendingSupplierCount} supplier{pendingSupplierCount !== 1 ? 's' : ''} assigned — review and send bundled quote requests
+                      {pendingSupplierCount} supplier{pendingSupplierCount !== 1 ? 's' : ''} assigned - review and send bundled quote requests
                     </p>
                   </div>
                 </div>
@@ -552,7 +552,7 @@ const EventDetail: React.FC<EventDetailProps> = ({ eventId, onBack, onGeneratePr
         </div>
       </div>
 
-      {/* Hire My Supplier Modal — Now assigns supplier to line item */}
+      {/* Hire My Supplier Modal - Now assigns supplier to line item */}
       {showRFQ && rfqTarget && (() => {
         const targetItem = event.lineItems.find(i => i.id === rfqTarget);
         const targetMoment = targetItem?.momentId ? (event.moments || []).find(m => m.id === targetItem.momentId) : null;
@@ -572,7 +572,7 @@ const EventDetail: React.FC<EventDetailProps> = ({ eventId, onBack, onGeneratePr
                 <div>
                   <h3 className="text-lg font-light" style={{ fontFamily: '"Playfair Display", Georgia, serif', color: '#1A1A1A' }}>Hire My Supplier</h3>
                   <p className="text-[10px] text-gray-400">
-                    Assign a supplier to this item — requests are bundled and sent together
+                    Assign a supplier to this item - requests are bundled and sent together
                   </p>
                 </div>
               </div>

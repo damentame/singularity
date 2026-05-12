@@ -431,7 +431,7 @@ const MomentsScheduleBuilder: React.FC<MomentsScheduleBuilderProps> = ({ event, 
             <div className="flex items-center gap-2 mb-3">
               <DollarSign className="w-4 h-4" style={{ color: GOLD }} />
               <span className="text-[10px] font-semibold uppercase tracking-[0.15em]" style={{ color: GOLD }}>
-                {isOverall ? 'Overall' : activeMoment?.name} — Financial Summary
+                {isOverall ? 'Overall' : activeMoment?.name} - Financial Summary
               </span>
               <span className="text-[10px] text-gray-400 ml-auto">{momentItems.length} items</span>
             </div>
@@ -678,7 +678,7 @@ const MomentsScheduleBuilder: React.FC<MomentsScheduleBuilderProps> = ({ event, 
 
           const handleEmailAllSuppliers = () => {
             const momentName = isOverall ? 'Overall Event' : activeMoment?.name || 'Event';
-            const subject = encodeURIComponent(`Quote Request — ${momentName} — ${event.jobCode}`);
+            const subject = encodeURIComponent(`Quote Request - ${momentName} - ${event.jobCode}`);
             const itemList = supplierList.flatMap(s => s.items.map(i => `  - ${i} (${s.name})`)).join('\n');
             const body = encodeURIComponent(
               `Dear Supplier,\n\nWe are requesting quotes for the following items for "${momentName}":\n\n${itemList}\n\nEvent Reference: ${event.jobCode}\n\nPlease provide your best pricing at your earliest convenience.\n\nKind regards`
@@ -730,7 +730,7 @@ const MomentsScheduleBuilder: React.FC<MomentsScheduleBuilderProps> = ({ event, 
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            const subject = encodeURIComponent(`Quote Request — ${activeMoment?.name || 'Event'} — ${event.jobCode}`);
+                            const subject = encodeURIComponent(`Quote Request - ${activeMoment?.name || 'Event'} - ${event.jobCode}`);
                             const items = supplier.items.map(i => `  - ${i}`).join('\n');
                             const body = encodeURIComponent(`Dear ${supplier.name},\n\nWe are requesting a quote for:\n\n${items}\n\nEvent Reference: ${event.jobCode}\n\nKind regards`);
                             window.open(`mailto:${supplier.email}?subject=${subject}&body=${body}`, '_blank');
@@ -1079,7 +1079,7 @@ const MomentsScheduleBuilder: React.FC<MomentsScheduleBuilderProps> = ({ event, 
                           <span className="text-[11px] font-medium flex items-center gap-1" style={{ color }}>
                             <Clock className="w-3 h-3" />
                             {formatTime12(moment.startTime)}
-                            {moment.endTime && <span className="text-gray-400 mx-0.5">—</span>}
+                            {moment.endTime && <span className="text-gray-400 mx-0.5"> - </span>}
                             {moment.endTime && formatTime12(moment.endTime)}
                           </span>
                         )}

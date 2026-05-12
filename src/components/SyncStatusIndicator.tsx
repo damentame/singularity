@@ -242,7 +242,7 @@ const SyncStatusIndicator: React.FC = () => {
                   {syncResult.flushed > 0 && `${syncResult.flushed} synced`}
                   {syncResult.failed > 0 && ` · ${syncResult.failed} failed`}
                   {syncResult.remaining > 0 && ` · ${syncResult.remaining} remaining`}
-                  {syncResult.remaining === 0 && syncResult.flushed > 0 && ' — All caught up!'}
+                  {syncResult.remaining === 0 && syncResult.flushed > 0 && ' - All caught up!'}
                 </span>
               </div>
             )}

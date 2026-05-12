@@ -91,7 +91,7 @@ const RFQSourcingPanel: React.FC<RFQSourcingPanelProps> = ({ event }) => {
 
     const logEntry = {
       id: `log-${Date.now()}`, eventId: event.id, action: 'RFQ_ACCEPTED',
-      details: `Accepted quote v${latest.versionNumber} from batch — ${fmt(latest.totals.gross)}`,
+      details: `Accepted quote v${latest.versionNumber} from batch - ${fmt(latest.totals.gross)}`,
       actor: 'Coordinator', timestamp: new Date().toISOString(),
     };
     updateEvent(event.id, { lineItems: updatedLineItems, activityLog: [...(event.activityLog || []), logEntry] });
@@ -204,7 +204,7 @@ const RFQSourcingPanel: React.FC<RFQSourcingPanelProps> = ({ event }) => {
                       <div className="flex items-center gap-3 mt-0.5 text-[10px] text-gray-400">
                         <span>{items.length} items</span>
                         {batch.sentAt && <span>Sent: {new Date(batch.sentAt).toLocaleDateString()}</span>}
-                        {latestSubmitted && <span>Quoted: v{latestSubmitted.versionNumber} — {fmt(latestSubmitted.totals.gross)}</span>}
+                        {latestSubmitted && <span>Quoted: v{latestSubmitted.versionNumber} - {fmt(latestSubmitted.totals.gross)}</span>}
                         {batch.lastSupplierSaveAt && <span><Clock className="w-2.5 h-2.5 inline" /> Last save: {new Date(batch.lastSupplierSaveAt).toLocaleString()}</span>}
                       </div>
                     </div>
@@ -299,7 +299,7 @@ const RFQSourcingPanel: React.FC<RFQSourcingPanelProps> = ({ event }) => {
         const batch = batches.find(b => b.id === showEmailModal);
         if (!batch) return null;
         const portalUrl = getPortalUrl(batch.portalToken);
-        const emailBody = `Dear ${batch.supplierName},\n\nWe would like to request a quotation for an upcoming event.\n\nEvent: ${getEventDisplayName(event)}\nDate: ${event.date || 'TBC'}\nLocation: ${event.city || ''}, ${event.country || ''}\nItems: ${getItemsForBatch(batch.id).length} items\n\nPlease use the secure portal link below to view items and submit your quote:\n${portalUrl}\n\nThis link is long-lived — you can return at any time to update your prices.\n\n${batch.messageToSupplier ? `Note: ${batch.messageToSupplier}\n\n` : ''}Thank you.`;
+        const emailBody = `Dear ${batch.supplierName},\n\nWe would like to request a quotation for an upcoming event.\n\nEvent: ${getEventDisplayName(event)}\nDate: ${event.date || 'TBC'}\nLocation: ${event.city || ''}, ${event.country || ''}\nItems: ${getItemsForBatch(batch.id).length} items\n\nPlease use the secure portal link below to view items and submit your quote:\n${portalUrl}\n\nThis link is long-lived - you can return at any time to update your prices.\n\n${batch.messageToSupplier ? `Note: ${batch.messageToSupplier}\n\n` : ''}Thank you.`;
 
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setShowEmailModal(null)}>

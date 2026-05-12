@@ -782,7 +782,7 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({ open, onClose, onCr
                   <Building2 className="w-3 h-3 inline mr-1" />
                   Corporate Structure
                 </label>
-                <p className="text-[10px] text-gray-400 mb-3">Display: Company — Division — Event Title</p>
+                <p className="text-[10px] text-gray-400 mb-3">Display: Company - Division - Event Title</p>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
                     <label className="block text-[10px] uppercase tracking-widest text-gray-400 mb-1">
@@ -829,7 +829,7 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({ open, onClose, onCr
                   <div className="mt-3 px-3 py-2 rounded-lg" style={{ backgroundColor: 'rgba(201,162,74,0.06)' }}>
                     <span className="text-[10px] text-gray-400 uppercase tracking-wider">Preview: </span>
                     <span className="text-xs font-medium" style={{ color: '#1A1A1A' }}>
-                      {[companyName, divisionName, eventTitle].filter(Boolean).join(' — ') || '...'}
+                      {[companyName, divisionName, eventTitle].filter(Boolean).join(' - ') || '...'}
                     </span>
                   </div>
                 )}

@@ -300,7 +300,7 @@ const LineItemSpecEditor: React.FC<LineItemSpecEditorProps> = ({ event, lineItem
                           value={spec.culturalConstraints}
                           onChange={(v) => updateSpec(event.id, spec.id, { culturalConstraints: v })}
                           multiline
-                          placeholder='e.g. "No chrysanthemums — funeral symbolism"'
+                          placeholder='e.g. "No chrysanthemums - funeral symbolism"'
                           accentColor="#F59E0B"
                         />
 
@@ -311,7 +311,7 @@ const LineItemSpecEditor: React.FC<LineItemSpecEditorProps> = ({ event, lineItem
                           value={spec.safetyConstraints}
                           onChange={(v) => updateSpec(event.id, spec.id, { safetyConstraints: v })}
                           multiline
-                          placeholder='e.g. "No open flames — venue restriction"'
+                          placeholder='e.g. "No open flames - venue restriction"'
                           accentColor="#DC2626"
                         />
 

@@ -586,7 +586,7 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ onOpenEvent }) => {
                             <div className="flex items-center gap-2 text-xs text-gray-500">
                               <Calendar className="w-3.5 h-3.5" style={{ color: GOLD }} />
                               {new Date(event.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
-                              {isMultiDay && <span className="text-gray-400">— {new Date(event.endDate!).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</span>}
+                              {isMultiDay && <span className="text-gray-400"> -  {new Date(event.endDate!).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</span>}
                             </div>
                           )}
                           {locationParts.length > 0 && (

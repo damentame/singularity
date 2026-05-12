@@ -95,7 +95,7 @@ const SupplierAssignPanel: React.FC<AssignPanelProps> = ({ event, lineItemId, on
     if (!isAdmin) {
       const ar: ApprovalRequest = {
         id: `ar-${uid()}`, eventId: event.id, type: 'QUOTE_ACCEPTANCE',
-        referenceId: quoteId, referenceLabel: `${assignment.supplierName} v${quote.versionNumber} — ${fmt(quote.amount)}`,
+        referenceId: quoteId, referenceLabel: `${assignment.supplierName} v${quote.versionNumber} - ${fmt(quote.amount)}`,
         amount: quote.amount, requestedBy: 'Coordinator', requestedAt: now(),
         approvedBy: '', approvedAt: '', status: 'PENDING', notes: '',
       };
@@ -114,7 +114,7 @@ const SupplierAssignPanel: React.FC<AssignPanelProps> = ({ event, lineItemId, on
     });
     const bl: BudgetLine = {
       id: `bl-${uid()}`, eventId: event.id, type: 'SUPPLIER_QUOTE',
-      description: `${assignment.supplierName} — ${lineItem.name}`,
+      description: `${assignment.supplierName} - ${lineItem.name}`,
       amount: quote.amount, referenceId: quoteId, approvalRequestId: '', status: 'APPROVED', createdAt: now(),
     };
     updateEvent(event.id, {
@@ -377,7 +377,7 @@ const ControlTowerDashboard: React.FC<ControlTowerDashboardProps> = ({ event }) 
               <div key={ar.id} className="flex items-center justify-between p-3 rounded-lg bg-amber-50 border border-amber-200">
                 <div>
                   <p className="text-xs font-medium">{ar.referenceLabel}</p>
-                  <p className="text-[10px] text-gray-400">{ar.type === 'QUOTE_ACCEPTANCE' ? 'Quote Acceptance' : 'Adjustment'} — {fmt(ar.amount)}</p>
+                  <p className="text-[10px] text-gray-400">{ar.type === 'QUOTE_ACCEPTANCE' ? 'Quote Acceptance' : 'Adjustment'} - {fmt(ar.amount)}</p>
                 </div>
                 <div className="flex gap-1.5">
                   <button onClick={() => handleApprove(ar.id)} className="px-2.5 py-1 text-[10px] font-medium text-white rounded" style={{ backgroundColor: '#22C55E' }}>Approve</button>

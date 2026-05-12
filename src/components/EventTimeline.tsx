@@ -145,7 +145,7 @@ const EventTimeline: React.FC<EventTimelineProps> = ({ event, onMomentClick }) =
                             {hasTime && (
                               <span className="text-[11px] font-medium" style={{ color }}>
                                 {formatTime(moment.startTime)}
-                                {moment.endTime && <span className="text-gray-400 mx-1">—</span>}
+                                {moment.endTime && <span className="text-gray-400 mx-1"> - </span>}
                                 {moment.endTime && formatTime(moment.endTime)}
                               </span>
                             )}

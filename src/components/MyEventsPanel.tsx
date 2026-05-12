@@ -262,7 +262,7 @@ const MyEventsPanel: React.FC<MyEventsPanelProps> = ({ onOpenEvent }) => {
                         <Calendar className="w-3.5 h-3.5 flex-shrink-0" style={{ color: GOLD }} />
                         {new Date(saved.event_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
                         {saved.end_date && saved.end_date !== saved.event_date && (
-                          <span className="text-gray-400">— {new Date(saved.end_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                          <span className="text-gray-400"> -  {new Date(saved.end_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
                         )}
                       </div>
                     )}

@@ -322,7 +322,7 @@ const ServiceProviderDashboard: React.FC = () => {
     if (filesToUpload.length < validFiles.length) {
       toast({
         title: 'Some files skipped',
-        description: `Only ${filesToUpload.length} files uploaded — limit is 20 total.`,
+        description: `Only ${filesToUpload.length} files uploaded - limit is 20 total.`,
       });
     }
 

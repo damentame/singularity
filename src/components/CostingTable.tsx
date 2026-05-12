@@ -348,7 +348,7 @@ const CostingTable: React.FC<CostingTableProps> = ({ event, onHireSupplier }) =>
                                 color: isHired ? '#22C55E' : hasAssignment ? '#3B82F6' : GOLD,
                                 border: `1px solid ${isHired ? 'rgba(34,197,94,0.2)' : hasAssignment ? 'rgba(59,130,246,0.2)' : 'rgba(201,162,74,0.2)'}`,
                               }}
-                              title={hasAssignment ? `Assigned to ${pendingAssignment.supplierName} — click to change` : 'Hire My Supplier — Assign supplier'}
+                              title={hasAssignment ? `Assigned to ${pendingAssignment.supplierName} - click to change` : 'Hire My Supplier - Assign supplier'}
                             >
                               {isHired ? (
                                 <CheckCircle2 className="w-3 h-3" />

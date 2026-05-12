@@ -142,7 +142,7 @@ const SupplierProfile: React.FC = () => {
     }, 100);
   };
 
-  // Combine images — cover image first (hero), then static, then uploaded media
+  // Combine images - cover image first (hero), then static, then uploaded media
   const baseImages = [
     ...supplier.images,
     ...supplierMedia.filter(m => m.media_type === 'image').map(m => m.file_url)

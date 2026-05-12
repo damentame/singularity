@@ -456,7 +456,7 @@ const ClientDirectory: React.FC = () => {
                   </span>
                 </div>
                 <div className="col-span-2 text-xs text-gray-500 truncate">
-                  {[client.city, countryObj?.name].filter(Boolean).join(', ') || '—'}
+                  {[client.city, countryObj?.name].filter(Boolean).join(', ') || ' - '}
                 </div>
                 <div className="col-span-2 text-center text-xs text-gray-500">
                   {client.eventCount}

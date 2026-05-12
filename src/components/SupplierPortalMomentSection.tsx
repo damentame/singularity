@@ -215,14 +215,14 @@ const SupplierPortalMomentSection: React.FC<MomentSectionProps> = ({
                           </button>
                         </div>
                         <div className="col-span-1 text-right text-[10px] text-gray-500">
-                          {p.unitPrice > 0 ? fmt(breakdown.supplierNet) : '—'}
+                          {p.unitPrice > 0 ? fmt(breakdown.supplierNet) : ' - '}
                         </div>
                         <div className="col-span-1 text-right text-[10px] text-gray-400">
-                          {p.unitPrice > 0 ? fmt(breakdown.vatValue) : '—'}
+                          {p.unitPrice > 0 ? fmt(breakdown.vatValue) : ' - '}
                         </div>
                         <div className="col-span-2 text-right">
                           <span className="text-xs font-semibold" style={{ color: p.unitPrice > 0 ? '#1A1A1A' : '#D1D5DB' }}>
-                            {p.unitPrice > 0 ? fmt(breakdown.supplierGross) : '—'}
+                            {p.unitPrice > 0 ? fmt(breakdown.supplierGross) : ' - '}
                           </span>
                         </div>
                       </div>

@@ -69,7 +69,7 @@ const SpecSummaryBlock: React.FC<{ specs: LineItemSpec[]; venueSpaces: PlannerEv
               <div className="flex items-center gap-1 text-[10px]" style={{ color: '#8B5CF6' }}>
                 <MapPin className="w-2.5 h-2.5" />
                 <span className="font-medium">{spec.placementLabel}</span>
-                {space && <span className="text-gray-400">— {space.name}</span>}
+                {space && <span className="text-gray-400"> -  {space.name}</span>}
               </div>
             )}
             {spec.clientVisibleNotes && (
@@ -270,7 +270,7 @@ const MomentCostSection: React.FC<MomentCostSectionProps> = ({
       <div className="mt-3 ml-3 p-3 rounded-lg" style={{ backgroundColor: `${color}06`, border: `1px solid ${color}15` }}>
         <div className="flex justify-between items-baseline">
           <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: '#666' }}>
-            {moment ? moment.name : 'General'} — Subtotal
+            {moment ? moment.name : 'General'} - Subtotal
           </span>
           <span className="text-xs font-semibold" style={{ color: '#1A1A1A' }}>{fmt(momentClientTotal)}</span>
         </div>
@@ -382,7 +382,7 @@ const ProposalView: React.FC<ProposalViewProps> = ({ event, onBack }) => {
             </div>
           </div>
 
-          {/* Proposal Header — Event Name, Dates, Location, Guest Count */}
+          {/* Proposal Header - Event Name, Dates, Location, Guest Count */}
           <div className="mb-8 p-6 rounded-xl" style={{ backgroundColor: '#FAFAF7', border: '1px solid rgba(201,162,74,0.12)' }}>
             <h2
               className="text-xl font-light mb-3"
@@ -408,7 +408,7 @@ const ProposalView: React.FC<ProposalViewProps> = ({ event, onBack }) => {
                 : 'Date TBC'}
               {event.endDate && event.endDate !== event.date && (
                 <span className="text-gray-400">
-                  {' — '}
+                  {' - '}
                   {new Date(event.endDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}
                 </span>
               )}
@@ -551,7 +551,7 @@ const ProposalView: React.FC<ProposalViewProps> = ({ event, onBack }) => {
             <span className="text-[9px] uppercase tracking-wider font-semibold px-2 py-0.5 rounded-full" style={{ backgroundColor: 'rgba(201,162,74,0.1)', color: GOLD }}>Proposal</span>
           </div>
 
-          {/* ─── COST BREAKDOWN — ORGANIZED BY MOMENT ─────────────────────── */}
+          {/* ─── COST BREAKDOWN - ORGANIZED BY MOMENT ─────────────────────── */}
           <h2 className="text-xs uppercase tracking-widest mb-2" style={{ color: GOLD }}>Cost Breakdown by Moment</h2>
           <p className="text-[10px] text-gray-400 mb-6">
             All pricing is sourced directly from each moment's costing builder. Supplier pricing updates are reflected automatically.
@@ -628,7 +628,7 @@ const ProposalView: React.FC<ProposalViewProps> = ({ event, onBack }) => {
           )}
 
 
-          {/* ─── Staged Totals — Client-facing ────────────────────────────── */}
+          {/* ─── Staged Totals - Client-facing ────────────────────────────── */}
           <div className="mt-8 p-6 rounded-xl" style={{ backgroundColor: '#FAFAF7', border: '1px solid rgba(201,162,74,0.12)' }}>
             <h2 className="text-xs uppercase tracking-widest mb-4" style={{ color: GOLD }}>Summary</h2>
 
@@ -684,7 +684,7 @@ const ProposalView: React.FC<ProposalViewProps> = ({ event, onBack }) => {
               {/* Refundable Deposit */}
               {staged.refundableDeposit > 0 && (
                 <div className="flex justify-between items-baseline pl-3">
-                  <span className="text-[11px] text-gray-400">Refundable Deposit (10% of Dry-Hire items) — No {staged.vatName}</span>
+                  <span className="text-[11px] text-gray-400">Refundable Deposit (10% of Dry-Hire items) - No {staged.vatName}</span>
                   <span className="text-xs text-gray-500">{fmt(staged.refundableDeposit)}</span>
                 </div>
               )}
@@ -710,7 +710,7 @@ const ProposalView: React.FC<ProposalViewProps> = ({ event, onBack }) => {
               <path d="M5 8l2 2 4-4" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
             <span className="text-[9px] text-gray-400">
-              Pricing auto-updates from supplier quotes and moment costing builders — no manual editing required
+              Pricing auto-updates from supplier quotes and moment costing builders - no manual editing required
             </span>
           </div>
 

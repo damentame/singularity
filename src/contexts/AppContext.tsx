@@ -294,10 +294,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCurrentViewState(view);
   }, []);
 
-  // Guarded setShowAuthModal — never open if already authenticated
+  // Guarded setShowAuthModal - never open if already authenticated
   const setShowAuthModal = useCallback((show: boolean) => {
     if (show && user) {
-      // Already authenticated — don't show auth modal, route to dashboard instead
+      // Already authenticated - don't show auth modal, route to dashboard instead
       routeToRoleDashboard(user.role);
       return;
     }
@@ -589,7 +589,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
 
       if (data.user) {
-        // Create profile (best-effort — don't block signup if this fails due to RLS timing)
+        // Create profile (best-effort - don't block signup if this fails due to RLS timing)
         try {
           const { error: profileError } = await supabase.from('profiles').upsert({
             id: data.user.id,
@@ -632,7 +632,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           });
           return { success: true };
         } else {
-          // Email confirmation required — user cannot log in immediately
+          // Email confirmation required - user cannot log in immediately
           toast({
             title: 'Check Your Email',
             description: 'We sent you a confirmation link. Please confirm your email before signing in.',

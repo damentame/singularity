@@ -98,13 +98,13 @@ export const CURRENCY_OPTIONS: CurrencyOption[] = (() => {
     const cfg = COUNTRY_FINANCE_CONFIGS.find(c => c.currencyIso === iso);
     if (cfg && !seen.has(iso)) {
       seen.add(iso);
-      list.push({ iso, symbol: cfg.currencySymbol, label: `${cfg.currencySymbol} — ${iso}` });
+      list.push({ iso, symbol: cfg.currencySymbol, label: `${cfg.currencySymbol} - ${iso}` });
     }
   }
   for (const cfg of COUNTRY_FINANCE_CONFIGS) {
     if (!seen.has(cfg.currencyIso)) {
       seen.add(cfg.currencyIso);
-      list.push({ iso: cfg.currencyIso, symbol: cfg.currencySymbol, label: `${cfg.currencySymbol} — ${cfg.currencyIso}` });
+      list.push({ iso: cfg.currencyIso, symbol: cfg.currencySymbol, label: `${cfg.currencySymbol} - ${cfg.currencyIso}` });
     }
   }
   return list;

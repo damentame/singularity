@@ -220,7 +220,7 @@ const PortfolioGallery: React.FC<PortfolioGalleryProps> = ({
 
               {/* Provider name */}
               <div className="text-white/70 font-body text-sm">
-                {providerName} — Portfolio
+                {providerName} - Portfolio
               </div>
 
               {/* Actions */}

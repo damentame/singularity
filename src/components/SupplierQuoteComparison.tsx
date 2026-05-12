@@ -857,7 +857,7 @@ const SupplierQuoteComparison: React.FC<SupplierQuoteComparisonProps> = ({ event
                           <span className="text-xs text-gray-400">{fmtShort(comp.currentUnitCost * comp.lineItem.quantity)}</span>
                         </div>
                         <div className="bg-white px-3 py-2.5 text-right">
-                          <span className="text-[10px] text-gray-300">—</span>
+                          <span className="text-[10px] text-gray-300"> - </span>
                         </div>
                         <div className="bg-white px-3 py-2.5" />
                       </div>
@@ -937,7 +937,7 @@ const SupplierQuoteComparison: React.FC<SupplierQuoteComparisonProps> = ({ event
                                   {fmtShort(q.totalPrice)}
                                 </span>
                               ) : (
-                                <span className="text-[10px] text-gray-300">—</span>
+                                <span className="text-[10px] text-gray-300"> - </span>
                               )}
                             </div>
 
@@ -945,7 +945,7 @@ const SupplierQuoteComparison: React.FC<SupplierQuoteComparisonProps> = ({ event
                               {q.leadTimeDays > 0 ? (
                                 <span className="text-[10px] text-gray-500">{q.leadTimeDays} days</span>
                               ) : (
-                                <span className="text-[10px] text-gray-300">—</span>
+                                <span className="text-[10px] text-gray-300"> - </span>
                               )}
                             </div>
 

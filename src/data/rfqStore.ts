@@ -322,7 +322,7 @@ export const applySupplierPricingToEvent = (batchId: string, quoteVersionId: str
         supplierPriceIncludesVat: qi.supplierPriceIncludesVat,
         vatRateUsed: qi.vatRateUsed,
         // Clear setup/breakdown/delivery since supplier quote is all-in unit price
-        // (keep existing values — the supplier is quoting unit price only)
+        // (keep existing values - the supplier is quoting unit price only)
       };
       updated = true;
     });

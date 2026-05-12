@@ -208,7 +208,7 @@ export function useEventPersistence() {
 
     for (const item of queue) {
       if (item.retryCount >= MAX_RETRIES) {
-        // Too many retries — leave in queue but mark as error
+        // Too many retries - leave in queue but mark as error
         updateQueueItem(item.id, { lastError: 'Max retries exceeded' });
         failed++;
         continue;
@@ -316,7 +316,7 @@ export function useEventPersistence() {
       setIsSaving(false);
       return true;
     } else if (result.queued) {
-      // Queued for later — not a hard failure
+      // Queued for later - not a hard failure
       setIsSaving(false);
       return true; // Return true so auto-save doesn't keep retrying immediately
     } else {

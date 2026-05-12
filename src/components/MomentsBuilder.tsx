@@ -72,7 +72,7 @@ const MomentsBuilder: React.FC<MomentsBuilderProps> = ({ event }) => {
       programGroups.push({ programId: '', programName: 'Unassigned', moments: unassigned });
     }
   } else {
-    // No programs — show all moments flat
+    // No programs - show all moments flat
     programGroups.push({ programId: '', programName: '', moments: topLevelMoments });
   }
 
@@ -123,7 +123,7 @@ const MomentsBuilder: React.FC<MomentsBuilderProps> = ({ event }) => {
         </p>
       )}
 
-      {/* Moments List — grouped by program if programs exist */}
+      {/* Moments List - grouped by program if programs exist */}
       {programGroups.map((group) => (
         <div key={group.programId || '_unassigned'} className="mb-4">
           {/* Program header (only if programs exist) */}

@@ -230,7 +230,7 @@ const TaskManager: React.FC<TaskManagerProps> = ({ event }) => {
                   onClick={() => cycleStatus(task)}
                   className="mt-0.5 flex-shrink-0 transition-colors"
                   style={{ color: sc.text }}
-                  title={`Status: ${TASK_STATUS_LABELS[task.status]} — click to cycle`}
+                  title={`Status: ${TASK_STATUS_LABELS[task.status]} - click to cycle`}
                 >
                   {sc.icon}
                 </button>

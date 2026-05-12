@@ -428,7 +428,7 @@ const EventDetailsCard: React.FC<EventDetailsCardProps> = ({ event }) => {
         <>
           <GoldDivider />
           <SubHeading><Building2 className="w-3.5 h-3.5 inline mr-1.5" />Corporate Structure</SubHeading>
-          <p className="text-[10px] text-gray-300 mb-3 italic">Display format: Company — Division — Event Title</p>
+          <p className="text-[10px] text-gray-300 mb-3 italic">Display format: Company - Division - Event Title</p>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <FieldLabel required>Company Name</FieldLabel>
@@ -462,7 +462,7 @@ const EventDetailsCard: React.FC<EventDetailsCardProps> = ({ event }) => {
       </button>
       {showClientDetails && (
         <div className="mb-2">
-          <p className="text-[10px] text-gray-300 mb-4 italic">Client details are internal only — not shared with suppliers.</p>
+          <p className="text-[10px] text-gray-300 mb-4 italic">Client details are internal only - not shared with suppliers.</p>
           {event.eventType === 'corporate' && renderCorporateFields()}
           {event.eventType === 'wedding' && renderWeddingFields()}
           {event.eventType === 'celebration' && renderCelebrationFields()}

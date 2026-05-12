@@ -197,7 +197,7 @@ const SupplierQuoteReview: React.FC<SupplierQuoteReviewProps> = ({ event, onClos
         id: `log-${Date.now()}`,
         eventId: event.id,
         action: 'BUNDLED_RFQ_SENT',
-        details: `Bundled RFQ sent to ${bundle.supplierName} (${bundle.supplierEmail}) — ${bundledItems.length} items`,
+        details: `Bundled RFQ sent to ${bundle.supplierName} (${bundle.supplierEmail}) - ${bundledItems.length} items`,
         actor: 'Coordinator',
         timestamp: new Date().toISOString(),
       };
@@ -469,7 +469,7 @@ const SupplierQuoteReview: React.FC<SupplierQuoteReviewProps> = ({ event, onClos
             <div className="flex items-center gap-2">
               <Shield className="w-3.5 h-3.5 text-green-500" />
               <span className="text-[10px] text-gray-400">
-                Suppliers will see event reference <span className="font-mono font-bold" style={{ color: '#1A1A1A' }}>{event.jobCode}</span> only — no client details
+                Suppliers will see event reference <span className="font-mono font-bold" style={{ color: '#1A1A1A' }}>{event.jobCode}</span> only - no client details
               </span>
             </div>
 
