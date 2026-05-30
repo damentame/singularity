@@ -26,7 +26,7 @@ Suggested task types: `feature`, `fix`, `chore`, `docs`, `refactor`, `test`.
 
 ## About this project
 
-The One Event Marketplace: a React + TypeScript + Vite web app (Tailwind CSS, shadcn/ui, Supabase).
+The One Event Marketplace: a React + TypeScript + Vite frontend (Tailwind CSS, shadcn/ui, Supabase) with a Python FastAPI backend.
 
 ---
 
@@ -51,13 +51,22 @@ For **full local backend / database development** (Docker-based workflows, local
 
 ---
 
-## Run the project (no Docker)
+## Project structure
 
-From the repository root.
+```text
+singularity/
+  backend/   Python FastAPI API
+  frontend/  React + TypeScript + Vite app
+```
+
+## Run the frontend (no Docker)
+
+From the frontend directory.
 
 ### 1. Install dependencies
 
 ```bash
+cd frontend
 npm install
 ```
 
@@ -68,6 +77,35 @@ npm run dev
 ```
 
 Vite serves the app at **http://localhost:8080/** (see `vite.config.ts` for host and port).
+
+## Run the backend (no Docker)
+
+From the backend directory.
+
+```bash
+cd backend
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+The API health endpoint is available at **http://localhost:8000/health**.
+
+## Run with Docker Compose
+
+From the repository root.
+
+```bash
+docker compose up --build
+```
+
+Services:
+
+| Service | URL |
+|---------|-----|
+| Frontend | http://localhost:8080/ |
+| Backend | http://localhost:8000/health |
 
 ### 3. Other useful commands
 
@@ -137,10 +175,12 @@ When the team adds a **`docker-compose.yml`**, prefer `docker compose up` from t
 
 | Path | Role |
 |------|------|
-| `src/` | Application source (components, pages, hooks, contexts). |
-| `src/pages/` | Route-level views wired in `App.tsx`. |
-| `public/` | Static assets served as-is. |
-| `vite.config.ts` | Vite config (aliases, dev server). |
+| `frontend/src/` | Frontend source (components, pages, hooks, contexts). |
+| `frontend/src/pages/` | Route-level views wired in `App.tsx`. |
+| `frontend/public/` | Static assets served as-is. |
+| `frontend/vite.config.ts` | Vite config (aliases, dev server). |
+| `backend/app/` | FastAPI application package. |
+| `docker-compose.yml` | Local frontend and backend services. |
 
 ---
 

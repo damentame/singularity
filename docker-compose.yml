@@ -1,9 +1,18 @@
 services:
   frontend:
     build:
-      context: .
+      context: ./frontend
       dockerfile: Dockerfile
     container_name: singularity-frontend
     ports:
       - "8080:80"
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: singularity-backend
+    ports:
+      - "8000:8000"
     restart: unless-stopped

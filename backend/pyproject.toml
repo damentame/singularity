@@ -1,0 +1,14 @@
+[project]
+name = "singularity-backend"
+version = "0.1.0"
+description = "Singularity backend API"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi",
+  "pydantic-settings",
+  "uvicorn[standard]",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*"]
