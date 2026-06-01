@@ -55,6 +55,16 @@ export interface Conversation {
 
 export type ViewType = 'home' | 'browse' | 'search-providers' | 'supplier' | 'dashboard' | 'messages' | 'budget' | 'checklist' | 'guests' | 'seating' | 'weather' | 'accommodation' | 'supplier-upload' | 'wizard' | 'workbook' | 'moodboard' | 'service-provider-registration' | 'provider-dashboard' | 'planner-dashboard' | 'event-detail' | 'event-proposal' | 'role-selector' | 'coordinator-dashboard' | 'coordinator-event' | 'coordinator-proposal' | 'profile' | 'reset-password';
 
+// Views that require the user to be authenticated.
+// Public views: home, browse, search-providers, supplier, reset-password
+export const PROTECTED_VIEWS = new Set<ViewType>([
+  'profile', 'messages', 'dashboard', 'budget', 'checklist', 'guests',
+  'seating', 'weather', 'accommodation', 'supplier-upload', 'wizard',
+  'workbook', 'moodboard', 'service-provider-registration', 'provider-dashboard',
+  'planner-dashboard', 'event-detail', 'event-proposal',
+  'coordinator-dashboard', 'coordinator-event', 'coordinator-proposal',
+]);
+
 // Service Provider Registration Data
 export interface ServiceProviderFormData {
   country: string;
@@ -228,7 +238,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
-  
+  // Stable ref so setCurrentView doesn't recreate on every auth change
+  const userRef = useRef<User | null>(null);
+  useEffect(() => { userRef.current = user; }, [user]);
+
+  // Logout guard — if the user signs out while on a protected view, send them home.
+  useEffect(() => {
+    if (!user && !isLoading && PROTECTED_VIEWS.has(currentView)) {
+      setCurrentViewState('home');
+    }
+  }, [user, isLoading, currentView]);
+
   // Navigation
   const [currentView, setCurrentViewState] = useState<ViewType>('home');
   const [selectedSupplierId, setSelectedSupplierId] = useState<string | null>(null);
@@ -284,11 +304,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, []);
 
-  // Guarded setCurrentView
+  // Guarded setCurrentView — blocks unauthenticated access to protected views.
+  // Uses userRef so the callback stays stable and doesn't trigger re-renders across the app.
   const setCurrentView = useCallback((view: ViewType) => {
-    // Redirect legacy role-selector to home
     if (view === 'role-selector') {
       setCurrentViewState('home');
+      return;
+    }
+    if (!userRef.current && PROTECTED_VIEWS.has(view)) {
+      setCurrentViewState('home');
+      setShowAuthModalState(true);
       return;
     }
     setCurrentViewState(view);

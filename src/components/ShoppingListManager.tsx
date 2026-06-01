@@ -62,7 +62,7 @@ const ShoppingListManager: React.FC<ShoppingListManagerProps> = ({ event }) => {
       listName: newListName.trim(),
       status: 'DRAFT',
       supplierName: '',
-      currency: 'ZAR',
+      currency: event.currency || 'ZAR',
       totalEstimate: 0,
       notes: '',
     });

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   BarChart3, Filter, ChevronDown, ChevronRight, CheckCircle2, XCircle,
   TrendingDown, Award, Package, Layers, Tag, Users, ArrowUpDown,
@@ -22,6 +22,7 @@ import {
   acceptQuoteVersion,
   applySupplierPricingToEvent,
 } from '@/data/rfqStore';
+import { pullQuotesFromSupabase } from '@/lib/rfqSupabaseSync';
 
 import { getCurrencySymbol, formatCurrency } from '@/data/countryConfig';
 import { toast } from '@/components/ui/use-toast';
@@ -86,6 +87,22 @@ const SupplierQuoteComparison: React.FC<SupplierQuoteComparisonProps> = ({ event
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
   const [acceptedSelections, setAcceptedSelections] = useState<Record<string, string>>({});
   const [showFilters, setShowFilters] = useState(true);
+  const [syncing, setSyncing] = useState(false);
+
+  // Pull any quotes the supplier submitted cross-device from Supabase on open.
+  useEffect(() => {
+    let cancelled = false;
+    const pull = async () => {
+      setSyncing(true);
+      const newCount = await pullQuotesFromSupabase(event.id);
+      if (!cancelled) {
+        setSyncing(false);
+        if (newCount > 0) setRefreshKey(k => k + 1);
+      }
+    };
+    pull();
+    return () => { cancelled = true; };
+  }, [event.id]);
 
   const currSym = getCurrencySymbol(event.billingCurrency || event.currency || 'ZAR');
   const fmt = (n: number) => formatCurrency(n, currSym);
@@ -485,11 +502,19 @@ const SupplierQuoteComparison: React.FC<SupplierQuoteComparisonProps> = ({ event
         </h2>
         <div className="flex items-center gap-2">
           <button
-            onClick={() => setRefreshKey(k => k + 1)}
-            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-medium transition-colors hover:bg-black/5"
+            onClick={async () => {
+              setSyncing(true);
+              const n = await pullQuotesFromSupabase(event.id);
+              setSyncing(false);
+              setRefreshKey(k => k + 1);
+              if (n > 0) toast({ title: `${n} new quote${n > 1 ? 's' : ''} synced from portal` });
+            }}
+            disabled={syncing}
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-medium transition-colors hover:bg-black/5 disabled:opacity-50"
             style={{ color: '#999' }}
           >
-            <RefreshCw className="w-3 h-3" /> Refresh
+            <RefreshCw className={`w-3 h-3 ${syncing ? 'animate-spin' : ''}`} />
+            {syncing ? 'Syncing…' : 'Sync & Refresh'}
           </button>
           <button
             onClick={handleExportCSV}

@@ -15,7 +15,7 @@ const saveAccounts = (accounts: ClientAccount[]) => {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(accounts));
 };
 
-const uid = () => `ca-${Date.now()}-${Math.random().toString(36).substr(2, 8)}`;
+const uid = () => `ca-${crypto.randomUUID()}`;
 
 export const getAllClientAccounts = (): ClientAccount[] => loadAccounts().filter(a => a.isActive);
 

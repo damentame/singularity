@@ -27,7 +27,10 @@ import {
   CheckCircle2,
   Image,
   FileImage,
-  Sparkles
+  Sparkles,
+  CreditCard,
+  FileText,
+  Clock as ClockIcon,
 } from 'lucide-react';
 
 import { 
@@ -40,6 +43,7 @@ import {
 } from '@/data/serviceProviderData';
 import { supabase } from '@/lib/supabase';
 import { uploadPortfolioImages, savePortfolioUrls } from '@/lib/portfolioUpload';
+import { uploadIdDocument, type IdDocumentType, ID_DOCUMENT_TYPE_LABELS } from '@/lib/idDocumentUpload';
 import { useAppContext } from '@/contexts/AppContext';
 import { toast } from '@/components/ui/use-toast';
 
@@ -105,12 +109,21 @@ const ServiceProviderWizard: React.FC<ServiceProviderWizardProps> = ({ onClose, 
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [registrationComplete, setRegistrationComplete] = useState(false);
   const [uploadProgressText, setUploadProgressText] = useState<string | null>(null);
-  const totalSteps = 6;
+  const totalSteps = 7;
 
 
-  // File input ref for portfolio
+  // File input refs
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const idFileInputRef = useRef<HTMLInputElement>(null);
+
   const [portfolioPreviews, setPortfolioPreviews] = useState<string[]>([]);
+
+  // ID document state
+  const [idDocumentFile, setIdDocumentFile] = useState<File | null>(null);
+  const [idDocumentType, setIdDocumentType] = useState<IdDocumentType | ''>('');
+  const [idDocumentPreview, setIdDocumentPreview] = useState<string | null>(null);
+  const [idUploadStatus, setIdUploadStatus] = useState<'none' | 'uploading' | 'uploaded' | 'error'>('none');
+  const [isDraggingId, setIsDraggingId] = useState(false);
 
   // N/A state for optional fields
   const [naFields, setNaFields] = useState<Record<string, boolean>>({
@@ -499,6 +512,52 @@ const ServiceProviderWizard: React.FC<ServiceProviderWizardProps> = ({ onClose, 
     }
   };
 
+  // ─── ID Document Handlers ─────────────────────────────────────────────────
+
+  const ACCEPTED_ID_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+
+  const applyIdFile = (file: File) => {
+    if (!ACCEPTED_ID_TYPES.includes(file.type)) {
+      toast({ title: 'Invalid File Type', description: 'Please upload a JPG, PNG, WEBP, or PDF.', variant: 'destructive' });
+      return;
+    }
+    if (file.size > 20 * 1024 * 1024) {
+      toast({ title: 'File Too Large', description: 'Maximum file size is 20 MB.', variant: 'destructive' });
+      return;
+    }
+    if (idDocumentPreview) URL.revokeObjectURL(idDocumentPreview);
+    setIdDocumentFile(file);
+    setIdUploadStatus('none');
+    if (file.type.startsWith('image/')) {
+      setIdDocumentPreview(URL.createObjectURL(file));
+    } else {
+      setIdDocumentPreview(null); // PDF — show icon instead
+    }
+  };
+
+  const handleIdFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) applyIdFile(file);
+    if (idFileInputRef.current) idFileInputRef.current.value = '';
+  };
+
+  const handleIdDragOver = (e: React.DragEvent) => { e.preventDefault(); setIsDraggingId(true); };
+  const handleIdDragLeave = (e: React.DragEvent) => { e.preventDefault(); setIsDraggingId(false); };
+
+  const handleIdDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDraggingId(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) applyIdFile(file);
+  };
+
+  const removeIdDocument = () => {
+    if (idDocumentPreview) URL.revokeObjectURL(idDocumentPreview);
+    setIdDocumentFile(null);
+    setIdDocumentPreview(null);
+    setIdUploadStatus('none');
+  };
+
   const validateStep = (step: number): boolean => {
     const errors: Record<string, string> = {};
 
@@ -674,6 +733,34 @@ const ServiceProviderWizard: React.FC<ServiceProviderWizardProps> = ({ onClose, 
         }
       }
 
+      // Upload ID document (after DB save, non-blocking)
+      if (idDocumentFile && idDocumentType && user?.id) {
+        try {
+          setIdUploadStatus('uploading');
+          setUploadProgressText('Uploading identity document...');
+          const result = await uploadIdDocument(idDocumentFile, user.id, idDocumentType);
+          if (result.success) {
+            setIdUploadStatus('uploaded');
+            toast({ title: 'ID Document Uploaded', description: 'Your identity document is pending review.' });
+          } else {
+            setIdUploadStatus('error');
+            toast({
+              title: 'ID Upload Failed',
+              description: result.error || 'You can upload your document later from your dashboard.',
+              variant: 'destructive',
+            });
+          }
+        } catch {
+          setIdUploadStatus('error');
+          toast({
+            title: 'ID Upload Skipped',
+            description: 'Your registration was saved. Upload your ID from your dashboard.',
+          });
+        } finally {
+          setUploadProgressText(null);
+        }
+      }
+
       // Clear saved wizard progress after successful submission
       localStorage.removeItem(STORAGE_KEY);
 
@@ -743,6 +830,9 @@ const ServiceProviderWizard: React.FC<ServiceProviderWizardProps> = ({ onClose, 
         return formData.selectedEventTypes.length > 0;
       case 4:
         return Object.values(formData.selectedCategories).some(cats => cats.length > 0);
+      case 7:
+        // Optional step — always allow proceeding
+        return true;
       default:
         return true;
     }
@@ -755,6 +845,7 @@ const ServiceProviderWizard: React.FC<ServiceProviderWizardProps> = ({ onClose, 
     { number: 4, title: 'Services', icon: Briefcase },
     { number: 5, title: 'Details', icon: Clock },
     { number: 6, title: 'Compliance', icon: Shield },
+    { number: 7, title: 'Verify ID', icon: CreditCard },
   ];
 
   const eventTypeIcons: Record<string, React.ReactNode> = {
@@ -1897,6 +1988,195 @@ const ServiceProviderWizard: React.FC<ServiceProviderWizardProps> = ({ onClose, 
                 </div>
               </div>
             )}
+          </div>
+        );
+
+      case 7:
+        return (
+          <div className="space-y-8">
+            <div className="text-center mb-8">
+              <h2 className="text-3xl font-light tracking-wide mb-2" style={{ fontFamily: '"Playfair Display", Georgia, serif', color: '#FFFFFF' }}>
+                Verify Your Identity
+              </h2>
+              <p className="text-white/60" style={{ fontFamily: '"Inter", sans-serif' }}>
+                Upload a government-issued ID to build trust with clients
+              </p>
+            </div>
+
+            {/* Optional notice */}
+            <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-4">
+              <div className="flex items-start gap-3">
+                <CreditCard className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-blue-300 text-sm font-medium mb-1" style={{ fontFamily: '"Inter", sans-serif' }}>
+                    This step is optional
+                  </p>
+                  <p className="text-white/50 text-xs" style={{ fontFamily: '"Inter", sans-serif' }}>
+                    You can complete registration now and upload your ID later from your dashboard.
+                    Verified suppliers appear higher in search results and receive more bookings.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Document type selector */}
+            <div>
+              <label className="block text-sm uppercase tracking-widest text-gold mb-4" style={{ fontFamily: '"Inter", sans-serif' }}>
+                Document Type
+              </label>
+              <div className="grid grid-cols-3 gap-3">
+                {(Object.entries(ID_DOCUMENT_TYPE_LABELS) as [IdDocumentType, string][]).map(([key, label]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setIdDocumentType(key)}
+                    className={`p-4 rounded-xl border transition-all duration-200 text-left flex flex-col items-center gap-2 ${
+                      idDocumentType === key
+                        ? 'bg-gold/10 border-gold text-gold'
+                        : 'bg-white/5 border-white/10 text-white hover:border-gold/30'
+                    }`}
+                  >
+                    <CreditCard className="w-6 h-6" />
+                    <span className="text-xs text-center" style={{ fontFamily: '"Inter", sans-serif' }}>{label}</span>
+                    {idDocumentType === key && <Check className="w-3.5 h-3.5" />}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Upload area */}
+            <div>
+              <label className="block text-sm uppercase tracking-widest text-gold mb-4" style={{ fontFamily: '"Inter", sans-serif' }}>
+                Upload Document
+              </label>
+
+              {/* Hidden file input */}
+              <input
+                ref={idFileInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,application/pdf"
+                onChange={handleIdFileSelect}
+                className="hidden"
+              />
+
+              {!idDocumentFile ? (
+                <div
+                  onDragOver={handleIdDragOver}
+                  onDragLeave={handleIdDragLeave}
+                  onDrop={handleIdDrop}
+                  onClick={() => idFileInputRef.current?.click()}
+                  className={`border-2 border-dashed rounded-2xl p-10 text-center cursor-pointer transition-all duration-200 ${
+                    isDraggingId
+                      ? 'border-gold bg-gold/10 scale-[1.01]'
+                      : 'border-white/20 hover:border-gold/50 hover:bg-white/5'
+                  }`}
+                >
+                  <Upload className={`w-12 h-12 mx-auto mb-4 transition-colors ${isDraggingId ? 'text-gold' : 'text-gold/70'}`} />
+                  <p className="text-white mb-2" style={{ fontFamily: '"Inter", sans-serif' }}>
+                    {isDraggingId ? 'Drop your document here' : 'Drag and drop your document here'}
+                  </p>
+                  <p className="text-sm text-white/50 mb-4" style={{ fontFamily: '"Inter", sans-serif' }}>
+                    or click to browse
+                  </p>
+                  <div className="inline-flex items-center gap-2 px-6 py-2 bg-gold/20 border border-gold text-gold rounded-xl text-sm hover:bg-gold/30 transition-colors">
+                    <FileText className="w-4 h-4" />
+                    Choose File
+                  </div>
+                  <p className="text-xs text-white/30 mt-3" style={{ fontFamily: '"Inter", sans-serif' }}>
+                    Accepted: JPG, PNG, WEBP, PDF &bull; Max 20 MB
+                  </p>
+                </div>
+              ) : (
+                <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
+                  <div className="flex items-start gap-4">
+                    {/* Preview */}
+                    {idDocumentPreview ? (
+                      <div className="w-32 h-20 rounded-xl overflow-hidden border border-white/10 flex-shrink-0">
+                        <img src={idDocumentPreview} alt="ID preview" className="w-full h-full object-cover" />
+                      </div>
+                    ) : (
+                      <div className="w-32 h-20 rounded-xl border border-white/10 flex-shrink-0 flex flex-col items-center justify-center bg-white/5 gap-1">
+                        <FileText className="w-8 h-8 text-gold/60" />
+                        <span className="text-[10px] text-white/40 uppercase">PDF</span>
+                      </div>
+                    )}
+
+                    {/* File info */}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-white font-medium truncate" style={{ fontFamily: '"Inter", sans-serif' }}>
+                        {idDocumentFile.name}
+                      </p>
+                      <p className="text-xs text-white/40 mt-0.5" style={{ fontFamily: '"Inter", sans-serif' }}>
+                        {(idDocumentFile.size / 1024 / 1024).toFixed(2)} MB
+                        {idDocumentType && ` · ${ID_DOCUMENT_TYPE_LABELS[idDocumentType]}`}
+                      </p>
+
+                      {/* Status badge */}
+                      <div className="mt-3">
+                        {idUploadStatus === 'none' && (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs bg-white/10 text-white/60">
+                            <ClockIcon className="w-3 h-3" /> Ready to upload
+                          </span>
+                        )}
+                        {idUploadStatus === 'uploading' && (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs bg-blue-500/20 text-blue-300">
+                            <Loader2 className="w-3 h-3 animate-spin" /> Uploading...
+                          </span>
+                        )}
+                        {idUploadStatus === 'uploaded' && (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs bg-green-500/20 text-green-300">
+                            <Check className="w-3 h-3" /> Uploaded — pending review
+                          </span>
+                        )}
+                        {idUploadStatus === 'error' && (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs bg-red-500/20 text-red-300">
+                            <AlertCircle className="w-3 h-3" /> Upload failed
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Remove button */}
+                    <button
+                      type="button"
+                      onClick={removeIdDocument}
+                      className="p-2 rounded-lg hover:bg-white/10 transition-colors text-white/40 hover:text-white flex-shrink-0"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  {/* Replace button */}
+                  <button
+                    type="button"
+                    onClick={() => idFileInputRef.current?.click()}
+                    className="mt-4 text-xs text-gold/70 hover:text-gold transition-colors"
+                    style={{ fontFamily: '"Inter", sans-serif' }}
+                  >
+                    Replace document
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* What happens next */}
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
+              <h4 className="text-sm font-light text-gold mb-4" style={{ fontFamily: '"Playfair Display", Georgia, serif' }}>
+                What Happens After You Upload?
+              </h4>
+              <div className="space-y-3">
+                {[
+                  { icon: <ClockIcon className="w-4 h-4" />, text: 'Our team reviews your document within 1–2 business days' },
+                  { icon: <Shield className="w-4 h-4" />, text: 'Your document is stored securely and never shared publicly' },
+                  { icon: <CheckCircle2 className="w-4 h-4" />, text: 'Once approved, a verified badge appears on your profile' },
+                ].map((item, i) => (
+                  <div key={i} className="flex items-start gap-3">
+                    <div className="text-gold/60 mt-0.5 flex-shrink-0">{item.icon}</div>
+                    <p className="text-white/60 text-sm" style={{ fontFamily: '"Inter", sans-serif' }}>{item.text}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         );
 

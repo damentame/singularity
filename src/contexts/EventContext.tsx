@@ -601,10 +601,9 @@ export const RFQ_BATCH_STATUS_COLORS: Record<RFQBatchStatus, string> = {
 };
 
 export const generatePortalToken = (): string => {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
-  let token = '';
-  for (let i = 0; i < 32; i++) token += chars[Math.floor(Math.random() * chars.length)];
-  return token;
+  const arr = new Uint8Array(32);
+  crypto.getRandomValues(arr);
+  return Array.from(arr, b => b.toString(16).padStart(2, '0')).join('');
 };
 
 export interface RFQBatch {
@@ -829,7 +828,7 @@ const inferMomentType = (name: string): MomentType => {
 };
 
 export const getDefaultMoments = (eventType: EventType, eventDate: string): EventMoment[] => {
-  const makeId = () => `mom-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+  const makeId = () => `mom-${crypto.randomUUID()}`;
   let sortCounter = 0;
   const m = (name: string): EventMoment => ({
     id: makeId(), name, momentType: inferMomentType(name),
@@ -952,6 +951,8 @@ interface EventContextType {
   acceptProposal: (eventId: string) => string;
   updateSalesOrder: (eventId: string, orderId: string, updates: Partial<SalesOrder>) => void;
   generateShoppingListFromSO: (eventId: string, salesOrderId: string) => string;
+  // ─── Supabase Sync ─────────────────────────────────────────────────────────
+  mergeEventsFromSupabase: (remoteEvents: PlannerEvent[]) => void;
 }
 
 export interface CreateEventParams {
@@ -1021,7 +1022,7 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const selectedEvent = events.find(e => e.id === selectedEventId) || null;
 
   const createEvent = useCallback((params: CreateEventParams): string => {
-    const id = `evt-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const id = `evt-${crypto.randomUUID()}`;
     const now = new Date().toISOString();
     const jobCode = generateJobCode();
 
@@ -1034,7 +1035,7 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       supplierPriceIncludesVat: countryConfig.defaultPricesIncludeVat,
       vatRateUsed: countryConfig.vatRate,
       isDryHire: false,
-      id: `li-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      id: `li-${crypto.randomUUID()}`,
       quantity: item.isGuestDependent ? Math.max(1, Math.ceil(params.guestCount * item.guestRatio)) : item.quantity,
     }));
 
@@ -1056,7 +1057,7 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       status: 'active', createdAt: now, updatedAt: now,
       lineItems,
       versions: [{
-        id: `ver-${Date.now()}`, versionNumber: 1, timestamp: now,
+        id: `ver-${crypto.randomUUID()}`, versionNumber: 1, timestamp: now,
         changeDescription: 'Initial event creation',
         guestCount: params.guestCount,
         lineItems: JSON.parse(JSON.stringify(lineItems)),
@@ -1131,7 +1132,7 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, [events, persistEvents]);
 
   const addLineItem = useCallback((eventId: string, item: Omit<CostLineItem, 'id'>) => {
-    const id = `li-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const id = `li-${crypto.randomUUID()}`;
     persistEvents(events.map(e => {
       if (e.id !== eventId) return e;
       return { ...e, lineItems: [...e.lineItems, { ...item, id }], updatedAt: new Date().toISOString() };
@@ -1218,7 +1219,7 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     persistEvents(events.map(e => {
       if (e.id !== eventId) return e;
       const newVersion: EventVersion = {
-        id: `ver-${Date.now()}`, versionNumber: e.currentVersion + 1,
+        id: `ver-${crypto.randomUUID()}`, versionNumber: e.currentVersion + 1,
         timestamp: new Date().toISOString(), changeDescription: description,
         guestCount: e.guestCount, lineItems: JSON.parse(JSON.stringify(e.lineItems)),
       };
@@ -1242,14 +1243,14 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const duplicateEvent = useCallback((eventId: string): string => {
     const event = events.find(e => e.id === eventId);
     if (!event) return '';
-    const id = `evt-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const id = `evt-${crypto.randomUUID()}`;
     const now = new Date().toISOString();
     const newEvent: PlannerEvent = {
       ...JSON.parse(JSON.stringify(event)),
       id, name: `${getEventDisplayName(event)} (Copy)`, status: 'draft' as const,
       createdAt: now, updatedAt: now, jobCode: generateJobCode(),
       versions: [{
-        id: `ver-${Date.now()}`, versionNumber: 1, timestamp: now,
+        id: `ver-${crypto.randomUUID()}`, versionNumber: 1, timestamp: now,
         changeDescription: `Duplicated from "${getEventDisplayName(event)}"`,
         guestCount: event.guestCount, lineItems: JSON.parse(JSON.stringify(event.lineItems)),
       }],
@@ -1262,7 +1263,7 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const addRFQMessage = useCallback((eventId: string, msg: Omit<RFQMessage, 'id' | 'sentAt' | 'status'>) => {
     persistEvents(events.map(e => {
       if (e.id !== eventId) return e;
-      const newMsg: RFQMessage = { ...msg, id: `rfq-${Date.now()}`, sentAt: new Date().toISOString(), status: 'sent' };
+      const newMsg: RFQMessage = { ...msg, id: `rfq-${crypto.randomUUID()}`, sentAt: new Date().toISOString(), status: 'sent' };
       return {
         ...e, rfqMessages: [...(e.rfqMessages || []), newMsg],
         lineItems: e.lineItems.map(item => item.id === msg.lineItemId ? { ...item, rfqSent: true, rfqJobCode: msg.jobCode } : item),
@@ -1274,7 +1275,7 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   // ─── Venue Spaces ──────────────────────────────────────────────────────────
 
   const addVenueSpace = useCallback((eventId: string, space: Omit<VenueSpace, 'id'>) => {
-    const id = `vs-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+    const id = `vs-${crypto.randomUUID()}`;
     persistEvents(events.map(e => e.id !== eventId ? e : { ...e, venueSpaces: [...(e.venueSpaces || []), { ...space, id }], updatedAt: new Date().toISOString() }));
   }, [events, persistEvents]);
 
@@ -1293,7 +1294,7 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   // ─── Moments ───────────────────────────────────────────────────────────────
 
   const addMoment = useCallback((eventId: string, moment: Omit<EventMoment, 'id'>) => {
-    const id = `mom-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+    const id = `mom-${crypto.randomUUID()}`;
     persistEvents(events.map(e => e.id !== eventId ? e : { ...e, moments: [...(e.moments || []), { ...moment, id }], updatedAt: new Date().toISOString() }));
   }, [events, persistEvents]);
 
@@ -1312,7 +1313,7 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   // ─── Programs ──────────────────────────────────────────────────────────────
 
   const addProgram = useCallback((eventId: string, program: Omit<EventProgram, 'id'>) => {
-    const id = `prog-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+    const id = `prog-${crypto.randomUUID()}`;
     persistEvents(events.map(e => e.id !== eventId ? e : { ...e, programs: [...(e.programs || []), { ...program, id }], updatedAt: new Date().toISOString() }));
   }, [events, persistEvents]);
 
@@ -1332,7 +1333,7 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   // ─── Backup Venue Spaces ───────────────────────────────────────────────────
 
   const addBackupVenueSpace = useCallback((eventId: string, space: Omit<VenueSpace, 'id'>) => {
-    const id = `bvs-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+    const id = `bvs-${crypto.randomUUID()}`;
     persistEvents(events.map(e => e.id !== eventId ? e : { ...e, backupVenueSpaces: [...(e.backupVenueSpaces || []), { ...space, id }], updatedAt: new Date().toISOString() }));
   }, [events, persistEvents]);
 
@@ -1343,7 +1344,7 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   // ─── v6: Specs ─────────────────────────────────────────────────────────────
 
   const addSpec = useCallback((eventId: string, spec: Omit<LineItemSpec, 'id'>): string => {
-    const id = `spec-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+    const id = `spec-${crypto.randomUUID()}`;
     persistEvents(events.map(e => {
       if (e.id !== eventId) return e;
       const newSpecs = [...(e.specs || []), { ...spec, id }];
@@ -1382,7 +1383,7 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   // ─── v6: Tasks ─────────────────────────────────────────────────────────────
 
   const addTask = useCallback((eventId: string, task: Omit<EventTask, 'id' | 'createdAt' | 'updatedAt'>) => {
-    const id = `task-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+    const id = `task-${crypto.randomUUID()}`;
     const now = new Date().toISOString();
     persistEvents(events.map(e => e.id !== eventId ? e : {
       ...e, tasks: [...(e.tasks || []), { ...task, id, createdAt: now, updatedAt: now }],
@@ -1406,7 +1407,7 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   // ─── v6: Shopping Lists ────────────────────────────────────────────────────
 
   const addShoppingList = useCallback((eventId: string, list: Omit<ShoppingList, 'id' | 'items' | 'createdAt' | 'updatedAt'>): string => {
-    const id = `sl-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+    const id = `sl-${crypto.randomUUID()}`;
     const now = new Date().toISOString();
     persistEvents(events.map(e => e.id !== eventId ? e : {
       ...e, shoppingLists: [...(e.shoppingLists || []), { ...list, id, items: [], createdAt: now, updatedAt: now }],
@@ -1429,7 +1430,7 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, [events, persistEvents]);
 
   const addShoppingListItem = useCallback((eventId: string, listId: string, item: Omit<ShoppingListItem, 'id'>) => {
-    const id = `sli-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+    const id = `sli-${crypto.randomUUID()}`;
     persistEvents(events.map(e => {
       if (e.id !== eventId) return e;
       return {
@@ -1482,14 +1483,14 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const acceptProposal = useCallback((eventId: string): string => {
     const event = events.find(e => e.id === eventId);
     if (!event) return '';
-    const soId = `so-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const soId = `so-${crypto.randomUUID()}`;
     const now = new Date().toISOString();
 
     // Snapshot all line items + copy specs
     const soItems: SalesOrderItem[] = event.lineItems.map(li => {
       const calc = calculateLineItem(li);
       return {
-        id: `soi-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
+        id: `soi-${crypto.randomUUID()}`,
         salesOrderId: soId,
         sourceLineItemId: li.id,
         name: li.name,
@@ -1510,7 +1511,7 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       .filter(s => s.ownerType === 'PROPOSAL_ITEM')
       .map(s => ({
         ...s,
-        id: `spec-so-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
+        id: `spec-so-${crypto.randomUUID()}`,
         ownerType: 'SALES_ORDER_ITEM' as const,
         updatedAt: now,
       }));
@@ -1561,11 +1562,11 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const so = (event.salesOrders || []).find(s => s.id === salesOrderId);
     if (!so) return '';
 
-    const listId = `sl-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+    const listId = `sl-${crypto.randomUUID()}`;
     const now = new Date().toISOString();
 
     const items: ShoppingListItem[] = so.items.map(soi => ({
-      id: `sli-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
+      id: `sli-${crypto.randomUUID()}`,
       shoppingListId: listId,
       sourceLineItemId: soi.sourceLineItemId,
       productId: '',
@@ -1591,7 +1592,7 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       listName: `Shopping List — ${so.orderNumber}`,
       status: 'DRAFT',
       supplierName: '',
-      currency: 'ZAR',
+      currency: event.currency || 'ZAR',
       totalEstimate,
       items,
       notes: '',
@@ -1605,6 +1606,30 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     return listId;
   }, [events, persistEvents]);
+
+  const mergeEventsFromSupabase = useCallback((remoteEvents: PlannerEvent[]) => {
+    setEvents(current => {
+      const localMap = new Map(current.map(e => [e.id, e]));
+      const result = [...current];
+
+      for (const remote of remoteEvents) {
+        const local = localMap.get(remote.id);
+        if (!local) {
+          result.push(migrateToV6(remote));
+        } else {
+          const localTime = new Date(local.updatedAt || 0).getTime();
+          const remoteTime = new Date(remote.updatedAt || 0).getTime();
+          if (remoteTime > localTime) {
+            const idx = result.findIndex(e => e.id === remote.id);
+            if (idx !== -1) result[idx] = migrateToV6(remote);
+          }
+        }
+      }
+
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(result));
+      return result;
+    });
+  }, []);
 
   return (
     <EventContext.Provider value={{
@@ -1623,6 +1648,7 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       addShoppingList, updateShoppingList, removeShoppingList,
       addShoppingListItem, updateShoppingListItem, removeShoppingListItem,
       acceptProposal, updateSalesOrder, generateShoppingListFromSO,
+      mergeEventsFromSupabase,
     }}>
       {children}
     </EventContext.Provider>

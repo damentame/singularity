@@ -12,9 +12,11 @@ import {
   SupplierAssignmentStatus,
 } from '@/contexts/EventContext';
 import { toast } from '@/components/ui/use-toast';
+import { getCurrencySymbol } from '@/data/countryConfig';
 
 const GOLD = '#C9A24A';
-const fmt = (n: number) => 'R ' + n.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const makeFmt = (currency: string) => (n: number) =>
+  getCurrencySymbol(currency) + ' ' + n.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 // ─── Supplier Assignment Panel (per line item) ──────────────────────────────
 
@@ -39,8 +41,9 @@ const SupplierAssignPanel: React.FC<AssignPanelProps> = ({ event, lineItemId, on
 
   if (!lineItem) return null;
 
+  const fmt = makeFmt(event.currency || 'ZAR');
   const now = () => new Date().toISOString();
-  const uid = () => `${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+  const uid = () => crypto.randomUUID();
 
   const logAction = (action: string, details: string): ActivityLogEntry => ({
     id: `log-${uid()}`, eventId: event.id, action, details, actor: 'Coordinator', timestamp: now(),
@@ -69,7 +72,7 @@ const SupplierAssignPanel: React.FC<AssignPanelProps> = ({ event, lineItemId, on
     const ver = existingQuotes.length + 1;
     const q: SupplierQuote = {
       id: `sq-${uid()}`, assignmentId: assignment.id, versionNumber: ver,
-      amount: amt, currency: 'ZAR', fileUrl: '', fileName: '',
+      amount: amt, currency: event.currency || 'ZAR', fileUrl: '', fileName: '',
       notes: quoteNotes.trim(), isAccepted: false, status: 'SUBMITTED', submittedAt: now(),
     };
     const newStatus: SupplierAssignmentStatus = ver > 1 ? 'QUOTE_REVISED' : 'QUOTE_RECEIVED';
@@ -224,6 +227,7 @@ const ControlTowerDashboard: React.FC<ControlTowerDashboardProps> = ({ event }) 
   const approvals = (event.approvalRequests || []).filter(a => a.status === 'PENDING');
   const acceptedCount = assignments.filter(a => a.status === 'ACCEPTED').length;
   const activityLog = (event.activityLog || []).slice(-10).reverse();
+  const fmt = makeFmt(event.currency || 'ZAR');
 
   // Spend by category
   const spendByCategory = useMemo(() => {
@@ -245,7 +249,7 @@ const ControlTowerDashboard: React.FC<ControlTowerDashboardProps> = ({ event }) 
     const ar = (event.approvalRequests || []).find(a => a.id === arId);
     if (!ar) return;
     const now = new Date().toISOString();
-    const uid = () => `${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+    const uid = () => crypto.randomUUID();
 
     if (ar.type === 'QUOTE_ACCEPTANCE') {
       const quote = (event.supplierQuotes || []).find(q => q.id === ar.referenceId);
@@ -289,7 +293,7 @@ const ControlTowerDashboard: React.FC<ControlTowerDashboardProps> = ({ event }) 
     const amt = parseFloat(adjAmt);
     if (isNaN(amt)) return;
     const now = new Date().toISOString();
-    const uid = `${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+    const uid = crypto.randomUUID();
     const ar: ApprovalRequest = {
       id: `ar-${uid}`, eventId: event.id, type: 'ADJUSTMENT',
       referenceId: '', referenceLabel: adjDesc.trim(), amount: amt,
@@ -401,7 +405,7 @@ const ControlTowerDashboard: React.FC<ControlTowerDashboardProps> = ({ event }) 
           <div className="space-y-2 mb-3 p-3 rounded-lg bg-gray-50">
             <input value={adjDesc} onChange={e => setAdjDesc(e.target.value)} placeholder="Description" className="w-full px-3 py-2 text-xs border rounded-lg" style={{ borderColor: 'rgba(201,162,74,0.2)' }} />
             <div className="flex gap-2">
-              <input value={adjAmt} onChange={e => setAdjAmt(e.target.value)} type="number" placeholder="Amount (R)" className="flex-1 px-3 py-2 text-xs border rounded-lg" style={{ borderColor: 'rgba(201,162,74,0.2)' }} />
+              <input value={adjAmt} onChange={e => setAdjAmt(e.target.value)} type="number" placeholder="Amount" className="flex-1 px-3 py-2 text-xs border rounded-lg" style={{ borderColor: 'rgba(201,162,74,0.2)' }} />
               <button onClick={handleCreateAdjustment} className="px-4 py-2 text-xs font-medium text-white rounded-lg" style={{ backgroundColor: GOLD }}>Submit</button>
             </div>
           </div>

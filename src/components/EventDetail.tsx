@@ -4,7 +4,7 @@ import {
   Save, FileText, Send, Inbox, History, CheckCircle2, ShoppingCart, Receipt,
   Layers, Shield, Package, BookTemplate, Clock, User, Image, BarChart3,
   Eye, EyeOff, Globe, ChevronDown, Loader2, Mail, AlertCircle, Hash,
-  Users, Plus, GitCompare,
+  Users, Plus, GitCompare, ShieldCheck,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { seedDemoAlerts } from '@/data/priceAlertStore';
@@ -38,13 +38,14 @@ import EventTimeline from './EventTimeline';
 import FullCostingView from './FullCostingView';
 import SupplierQuoteReview from './SupplierQuoteReview';
 import SupplierQuoteComparison from './SupplierQuoteComparison';
+import ComplianceDocumentsTab from './ComplianceDocumentsTab';
 import { toast } from '@/components/ui/use-toast';
 import { useAppContext } from '@/contexts/AppContext';
 
 
 const GOLD = '#C9A24A';
 
-type OperationsTab = 'sub-events' | 'timeline' | 'costing' | 'tasks' | 'shopping' | 'orders' | 'control-tower' | 'sourcing' | 'compare';
+type OperationsTab = 'sub-events' | 'timeline' | 'costing' | 'tasks' | 'shopping' | 'orders' | 'control-tower' | 'sourcing' | 'compare' | 'compliance';
 
 
 interface EventDetailProps {
@@ -194,6 +195,7 @@ const EventDetail: React.FC<EventDetailProps> = ({ eventId, onBack, onGeneratePr
     { key: 'tasks', label: 'Tasks', icon: <CheckCircle2 className="w-3.5 h-3.5" />, badge: todoCount },
     { key: 'shopping', label: 'Shopping', icon: <ShoppingCart className="w-3.5 h-3.5" />, badge: shoppingCount },
     { key: 'orders', label: 'Orders', icon: <Receipt className="w-3.5 h-3.5" />, badge: orderCount },
+    { key: 'compliance', label: 'Compliance', icon: <ShieldCheck className="w-3.5 h-3.5" /> },
   ];
 
 
@@ -316,6 +318,7 @@ const EventDetail: React.FC<EventDetailProps> = ({ eventId, onBack, onGeneratePr
                 {activeTab === 'sourcing' && <RFQSourcingPanel event={event} />}
                 {activeTab === 'compare' && <SupplierQuoteComparison event={event} />}
                 {activeTab === 'control-tower' && <ControlTowerDashboard event={event} />}
+                {activeTab === 'compliance' && <ComplianceDocumentsTab eventId={event.id} />}
 
               </div>
             </div>

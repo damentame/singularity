@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useParams } from 'react-router-dom';
 import {
   Search, Save, Send, CheckCircle2, Clock, AlertCircle, Package, FileText,
-  Upload, X, Paperclip, Shield, ArrowRight, Info, Loader2
+  Upload, X, Paperclip, Shield, ArrowRight, Info, Loader2, ShieldCheck, ChevronDown, Plus,
 } from 'lucide-react';
 import {
   PlannerEvent, RFQBatch, RFQBatchItem, SupplierQuoteVersionItem,
@@ -15,6 +15,14 @@ import {
   getDocumentsForBatch, addDocumentToBatch, removeDocumentFromBatch,
   SupplierDocument,
 } from '@/data/rfqStore';
+import {
+  getPortalData, savePortalQuote, savePortalDocument, removePortalDocument,
+} from '@/lib/rfqPortalApi';
+import {
+  ComplianceDocument, ComplianceDocumentType, COMPLIANCE_DOCUMENT_TYPES,
+  COMPLIANCE_STATUS_LABELS, COMPLIANCE_STATUS_COLORS, getComplianceStatus,
+  portalGetComplianceDocs, portalUploadComplianceDoc,
+} from '@/lib/complianceDocuments';
 import { getCurrencySymbol, formatCurrency, calculateVatBreakdown } from '@/data/countryConfig';
 import { supabase } from '@/lib/supabase';
 import SupplierPortalMomentSection, { ItemPriceEntry } from './SupplierPortalMomentSection';
@@ -40,40 +48,109 @@ const SupplierPortal: React.FC = () => {
   const [documents, setDocuments] = useState<SupplierDocument[]>([]);
   const [uploading, setUploading] = useState(false);
   const [showConfirmSubmit, setShowConfirmSubmit] = useState(false);
+  const [loading, setLoading] = useState(true);
+  // Compliance documents
+  const [complianceDocs, setComplianceDocs] = useState<ComplianceDocument[]>([]);
+  const [showComplianceForm, setShowComplianceForm] = useState(false);
+  const [complianceForm, setComplianceForm] = useState({
+    documentType: 'supplier_certification' as ComplianceDocumentType,
+    title: '', issuedBy: '', issueDate: '', expiryDate: '', notes: '',
+  });
+  const [complianceFile, setComplianceFile] = useState<File | null>(null);
+  const [complianceUploading, setComplianceUploading] = useState(false);
+  const complianceFileRef = useRef<HTMLInputElement>(null);
+  // true when this portal session loaded data from Supabase (cross-device supplier)
+  const supabaseSessionRef = useRef(false);
   const dirtyRef = useRef(false);
   const autoSaveRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Load data
+  // Load data — Supabase first (cross-device), localStorage fallback (same device)
   useEffect(() => {
     if (!token) return;
-    const result = findEventForToken(token);
-    if (result.event && result.batch) {
-      setEvent(result.event);
-      setBatch(result.batch);
-      const items = getItemsForBatch(result.batch.id);
-      setBatchItems(items);
-      setDocuments(getDocumentsForBatch(result.batch.id));
 
-      // Load latest draft or submitted prices
-      const latestDraft = getLatestDraft(result.batch.id);
-      const latestSubmitted = getLatestSubmitted(result.batch.id);
-      const source = latestDraft || latestSubmitted;
+    const load = async () => {
+      setLoading(true);
 
-      const initPrices: Record<string, ItemPriceEntry> = {};
-      items.forEach(bi => {
-        const existing = source?.items.find(qi => qi.rfqBatchItemId === bi.id);
-        initPrices[bi.id] = {
-          rfqBatchItemId: bi.id,
-          unitPrice: existing?.supplierUnitPriceInput || 0,
-          includesVat: existing?.supplierPriceIncludesVat ?? (result.event?.defaultPricesIncludeVat ?? true),
-          availabilityNotes: existing?.availabilityNotes || '',
-          leadTimeDays: existing?.leadTimeDays || 0,
-        };
-      });
-      setPrices(initPrices);
-      if (source?.supplierNotes) setSupplierNotes(source.supplierNotes);
-    }
+      // ── 1. Try Supabase ────────────────────────────────────────────────────
+      const portalData = await getPortalData(token);
+      if (portalData) {
+        supabaseSessionRef.current = true;
+        const ctx = portalData.batch.eventContext;
+        // Reconstruct a minimal PlannerEvent from the stored context snapshot
+        const syntheticEvent = {
+          id: portalData.batch.eventId,
+          name: ctx.name || '',
+          currency: ctx.currency || 'ZAR',
+          vatRate: ctx.vatRate ?? 0.15,
+          defaultPricesIncludeVat: ctx.defaultPricesIncludeVat ?? true,
+          moments: ctx.moments || [],
+          venueSpaces: ctx.venueSpaces || [],
+          city: ctx.city || '',
+          country: ctx.country || '',
+          date: ctx.date || '',
+          jobCode: ctx.jobCode || '',
+          lineItems: [],
+        } as any;
+
+        setEvent(syntheticEvent);
+        setBatch(portalData.batch);
+        setBatchItems(portalData.batchItems);
+        setDocuments(portalData.documents);
+
+        // Load compliance docs for this event
+        portalGetComplianceDocs(token).then(setComplianceDocs);
+
+        const source = portalData.latestDraft || portalData.latestSubmitted;
+        const initPrices: Record<string, ItemPriceEntry> = {};
+        portalData.batchItems.forEach(bi => {
+          const existing = source?.items.find(qi => qi.rfqBatchItemId === bi.id);
+          initPrices[bi.id] = {
+            rfqBatchItemId: bi.id,
+            unitPrice: existing?.supplierUnitPriceInput || 0,
+            includesVat: existing?.supplierPriceIncludesVat ?? (ctx.defaultPricesIncludeVat ?? true),
+            availabilityNotes: existing?.availabilityNotes || '',
+            leadTimeDays: existing?.leadTimeDays || 0,
+          };
+        });
+        setPrices(initPrices);
+        if (source?.supplierNotes) setSupplierNotes(source.supplierNotes);
+        setLoading(false);
+        return;
+      }
+
+      // ── 2. Fallback: same device as coordinator (localStorage) ─────────────
+      supabaseSessionRef.current = false;
+      const result = findEventForToken(token);
+      if (result.event && result.batch) {
+        setEvent(result.event);
+        setBatch(result.batch);
+        const items = getItemsForBatch(result.batch.id);
+        setBatchItems(items);
+        setDocuments(getDocumentsForBatch(result.batch.id));
+
+        const latestDraft = getLatestDraft(result.batch.id);
+        const latestSubmitted = getLatestSubmitted(result.batch.id);
+        const source = latestDraft || latestSubmitted;
+
+        const initPrices: Record<string, ItemPriceEntry> = {};
+        items.forEach(bi => {
+          const existing = source?.items.find(qi => qi.rfqBatchItemId === bi.id);
+          initPrices[bi.id] = {
+            rfqBatchItemId: bi.id,
+            unitPrice: existing?.supplierUnitPriceInput || 0,
+            includesVat: existing?.supplierPriceIncludesVat ?? (result.event?.defaultPricesIncludeVat ?? true),
+            availabilityNotes: existing?.availabilityNotes || '',
+            leadTimeDays: existing?.leadTimeDays || 0,
+          };
+        });
+        setPrices(initPrices);
+        if (source?.supplierNotes) setSupplierNotes(source.supplierNotes);
+      }
+      setLoading(false);
+    };
+
+    load();
   }, [token]);
 
   // Auto-save every 30 seconds
@@ -102,37 +179,52 @@ const SupplierPortal: React.FC = () => {
     });
   }, [batchItems, prices, event]);
 
-  const handleSaveDraft = useCallback((isAuto = false) => {
+  const handleSaveDraft = useCallback(async (isAuto = false) => {
     if (!batch || !event) return;
     setSaving(true);
     const items = buildQuoteItems();
-    saveQuoteVersion(batch.id, 'DRAFT_SAVE', items, supplierNotes, event.vatRate, event.defaultPricesIncludeVat);
+
+    if (supabaseSessionRef.current && token) {
+      // Supabase path (cross-device supplier)
+      await savePortalQuote(token, 'DRAFT_SAVE', items, supplierNotes, event.vatRate, event.defaultPricesIncludeVat);
+    } else {
+      // localStorage fallback (same device as coordinator)
+      saveQuoteVersion(batch.id, 'DRAFT_SAVE', items, supplierNotes, event.vatRate, event.defaultPricesIncludeVat);
+    }
+
     dirtyRef.current = false;
     setLastSaved(new Date().toLocaleTimeString());
     setTimeout(() => setSaving(false), 300);
-  }, [batch, event, buildQuoteItems, supplierNotes]);
+  }, [batch, event, token, buildQuoteItems, supplierNotes]);
 
-  const handleSubmit = useCallback(() => {
+  const handleSubmit = useCallback(async () => {
     if (!batch || !event) return;
     setSubmitting(true);
     const items = buildQuoteItems();
-    const qv = saveQuoteVersion(batch.id, 'SUBMITTED', items, supplierNotes, event.vatRate, event.defaultPricesIncludeVat);
 
-    // Auto-map supplier pricing back to event line items
-    if (qv) {
-      applySupplierPricingToEvent(batch.id, qv.id);
+    if (supabaseSessionRef.current && token) {
+      // Supabase path — write quote to DB, batch status updates via RPC
+      const result = await savePortalQuote(token, 'SUBMITTED', items, supplierNotes, event.vatRate, event.defaultPricesIncludeVat);
+      if (result) {
+        setBatch(prev => prev ? {
+          ...prev,
+          status: result.versionNumber > 1 ? 'REVISED' : 'QUOTED',
+          currentSubmittedVersion: result.versionNumber,
+        } : prev);
+      }
+    } else {
+      // localStorage fallback
+      const qv = saveQuoteVersion(batch.id, 'SUBMITTED', items, supplierNotes, event.vatRate, event.defaultPricesIncludeVat);
+      if (qv) applySupplierPricingToEvent(batch.id, qv.id);
+      const refreshed = findEventForToken(token || '');
+      if (refreshed.batch) setBatch(refreshed.batch);
     }
 
     dirtyRef.current = false;
     setSubmitted(true);
     setShowConfirmSubmit(false);
-
-    // Reload batch to get updated status
-    const result = findEventForToken(token || '');
-    if (result.batch) setBatch(result.batch);
-
     setTimeout(() => setSubmitting(false), 500);
-  }, [batch, event, buildQuoteItems, supplierNotes, token]);
+  }, [batch, event, token, buildQuoteItems, supplierNotes]);
 
   const updatePrice = (biId: string, unitPrice: number) => {
     setPrices(p => ({ ...p, [biId]: { ...p[biId], unitPrice } }));
@@ -166,54 +258,55 @@ const SupplierPortal: React.FC = () => {
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       const fileExt = file.name.split('.').pop();
-      const fileName = `rfq-${batch.id}/${Date.now()}-${Math.random().toString(36).substr(2, 6)}.${fileExt}`;
+      const docId = `doc-${crypto.randomUUID()}`;
+      const storagePath = `rfq-docs/${batch.portalToken}/${Date.now()}-${docId}.${fileExt}`;
 
+      let fileUrl = '';
       try {
-        const { data, error } = await supabase.storage
+        const { error } = await supabase.storage
           .from('supplier-media')
-          .upload(fileName, file, { cacheControl: '3600', upsert: false });
+          .upload(storagePath, file, { cacheControl: '3600', upsert: false });
 
         if (error) throw error;
 
         const { data: urlData } = supabase.storage
           .from('supplier-media')
-          .getPublicUrl(fileName);
-
-        const doc: SupplierDocument = {
-          id: `doc-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
-          rfqBatchId: batch.id,
-          fileName: file.name,
-          fileUrl: urlData.publicUrl,
-          fileSize: file.size,
-          mimeType: file.type,
-          uploadedAt: new Date().toISOString(),
-        };
-
-        addDocumentToBatch(doc);
-        setDocuments(prev => [...prev, doc]);
-      } catch (err) {
-        console.error('Upload failed:', err);
-        // Fallback: store as local reference
-        const doc: SupplierDocument = {
-          id: `doc-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
-          rfqBatchId: batch.id,
-          fileName: file.name,
-          fileUrl: URL.createObjectURL(file),
-          fileSize: file.size,
-          mimeType: file.type,
-          uploadedAt: new Date().toISOString(),
-        };
-        addDocumentToBatch(doc);
-        setDocuments(prev => [...prev, doc]);
+          .getPublicUrl(storagePath);
+        fileUrl = urlData.publicUrl;
+      } catch {
+        // Fallback: local blob URL
+        fileUrl = URL.createObjectURL(file);
       }
+
+      const doc: SupplierDocument = {
+        id: docId,
+        rfqBatchId: batch.id,
+        fileName: file.name,
+        fileUrl,
+        fileSize: file.size,
+        mimeType: file.type,
+        uploadedAt: new Date().toISOString(),
+      };
+
+      // Persist metadata — Supabase RPC or localStorage depending on session
+      if (supabaseSessionRef.current && token) {
+        await savePortalDocument(token, doc);
+      } else {
+        addDocumentToBatch(doc);
+      }
+      setDocuments(prev => [...prev, doc]);
     }
 
     setUploading(false);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  const handleRemoveDocument = (docId: string) => {
-    removeDocumentFromBatch(docId);
+  const handleRemoveDocument = async (docId: string) => {
+    if (supabaseSessionRef.current && token) {
+      await removePortalDocument(token, docId);
+    } else {
+      removeDocumentFromBatch(docId);
+    }
     setDocuments(prev => prev.filter(d => d.id !== docId));
   };
 
@@ -280,6 +373,18 @@ const SupplierPortal: React.FC = () => {
     if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`;
     return `${(bytes / 1048576).toFixed(1)} MB`;
   };
+
+  // ─── Loading State ───────────────────────────────────────────────────────────
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#F5F4F0' }}>
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-3" style={{ color: GOLD }} />
+          <p className="text-sm text-gray-400">Loading your quote portal…</p>
+        </div>
+      </div>
+    );
+  }
 
   // ─── Invalid Token State ─────────────────────────────────────────────────────
   if (!event || !batch) {
@@ -632,6 +737,154 @@ const SupplierPortal: React.FC = () => {
               The coordinator's event budget updates in real-time — no manual re-entry required.
             </p>
           </div>
+        </div>
+
+        {/* ─── Compliance Documents ────────────────────────────────────────── */}
+        <div className="mt-4 bg-white rounded-xl border p-5" style={{ borderColor: 'rgba(201,162,74,0.12)' }}>
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="w-3.5 h-3.5" style={{ color: GOLD }} />
+              <label className="text-[10px] font-bold uppercase tracking-[0.12em]" style={{ color: GOLD }}>
+                Compliance Documents
+              </label>
+            </div>
+            <button
+              onClick={() => setShowComplianceForm(v => !v)}
+              className="flex items-center gap-1 text-[10px] font-semibold px-2.5 py-1.5 rounded-lg transition-colors"
+              style={{ color: GOLD, backgroundColor: 'rgba(201,162,74,0.08)' }}
+            >
+              <Plus className="w-3 h-3" />
+              {showComplianceForm ? 'Cancel' : 'Add'}
+            </button>
+          </div>
+          <p className="text-[10px] text-gray-400 mb-3">Upload your compliance certifications relevant to this event — food license, supplier certification, liability insurance, etc.</p>
+
+          {showComplianceForm && (
+            <div className="border rounded-xl p-4 mb-4 space-y-3" style={{ borderColor: 'rgba(201,162,74,0.15)', backgroundColor: 'rgba(201,162,74,0.02)' }}>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] font-medium text-gray-400 mb-1">Document Type</label>
+                  <div className="relative">
+                    <select
+                      value={complianceForm.documentType}
+                      onChange={e => setComplianceForm(p => ({ ...p, documentType: e.target.value as ComplianceDocumentType }))}
+                      className="w-full appearance-none bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-xs pr-7 focus:outline-none"
+                    >
+                      {Object.entries(COMPLIANCE_DOCUMENT_TYPES).map(([k, v]) => (
+                        <option key={k} value={k}>{v}</option>
+                      ))}
+                    </select>
+                    <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400 pointer-events-none" />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-medium text-gray-400 mb-1">Title *</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Food Handler Certificate 2026"
+                    value={complianceForm.title}
+                    onChange={e => setComplianceForm(p => ({ ...p, title: e.target.value }))}
+                    className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-medium text-gray-400 mb-1">Issued By</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Dept. of Health"
+                    value={complianceForm.issuedBy}
+                    onChange={e => setComplianceForm(p => ({ ...p, issuedBy: e.target.value }))}
+                    className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-medium text-gray-400 mb-1">Expiry Date</label>
+                  <input
+                    type="date"
+                    value={complianceForm.expiryDate}
+                    onChange={e => setComplianceForm(p => ({ ...p, expiryDate: e.target.value }))}
+                    className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none"
+                  />
+                </div>
+              </div>
+              <div
+                className="border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition-colors"
+                style={{ borderColor: complianceFile ? 'rgba(22,163,74,0.4)' : 'rgba(201,162,74,0.25)' }}
+                onClick={() => complianceFileRef.current?.click()}
+              >
+                <input
+                  ref={complianceFileRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,application/pdf"
+                  className="hidden"
+                  onChange={e => {
+                    const f = e.target.files?.[0];
+                    if (f) {
+                      setComplianceFile(f);
+                      if (!complianceForm.title) setComplianceForm(p => ({ ...p, title: f.name.replace(/\.[^/.]+$/, '') }));
+                    }
+                  }}
+                />
+                {complianceFile
+                  ? <p className="text-xs text-green-700 font-medium">{complianceFile.name}</p>
+                  : <p className="text-xs text-gray-400"><span style={{ color: GOLD }}>Click to upload</span> — PDF, JPG, PNG (max 20MB)</p>
+                }
+              </div>
+              <button
+                onClick={async () => {
+                  if (!complianceFile || !complianceForm.title.trim() || !batch || !token) return;
+                  setComplianceUploading(true);
+                  const result = await portalUploadComplianceDoc(
+                    token, complianceFile, batch.eventId, batch.supplierName,
+                    {
+                      documentType: complianceForm.documentType,
+                      title: complianceForm.title.trim(),
+                      issuedBy: complianceForm.issuedBy.trim(),
+                      issueDate: complianceForm.issueDate || null,
+                      expiryDate: complianceForm.expiryDate || null,
+                      notes: complianceForm.notes.trim(),
+                    },
+                  );
+                  setComplianceUploading(false);
+                  if (result.success) {
+                    // Reload compliance docs
+                    const refreshed = await portalGetComplianceDocs(token);
+                    setComplianceDocs(refreshed);
+                    setComplianceForm({ documentType: 'supplier_certification', title: '', issuedBy: '', issueDate: '', expiryDate: '', notes: '' });
+                    setComplianceFile(null);
+                    setShowComplianceForm(false);
+                  }
+                }}
+                disabled={complianceUploading || !complianceFile || !complianceForm.title.trim()}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold transition-all disabled:opacity-50"
+                style={{ backgroundColor: GOLD, color: '#fff' }}
+              >
+                {complianceUploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ShieldCheck className="w-3.5 h-3.5" />}
+                {complianceUploading ? 'Uploading…' : 'Upload Document'}
+              </button>
+            </div>
+          )}
+
+          {complianceDocs.length > 0 && (
+            <div className="space-y-2">
+              {complianceDocs.map(doc => {
+                const status = getComplianceStatus(doc);
+                const colors = COMPLIANCE_STATUS_COLORS[status];
+                return (
+                  <div key={doc.id} className="flex items-center gap-3 p-3 rounded-xl border" style={{ borderColor: 'rgba(0,0,0,0.06)', backgroundColor: 'rgba(0,0,0,0.01)' }}>
+                    <FileText className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium text-gray-800 truncate">{doc.title}</p>
+                      <p className="text-[10px] text-gray-400">{COMPLIANCE_DOCUMENT_TYPES[doc.documentType]}{doc.expiryDate ? ` · Expires ${new Date(doc.expiryDate).toLocaleDateString('en-ZA', { day: '2-digit', month: 'short', year: 'numeric' })}` : ''}</p>
+                    </div>
+                    <span className="flex-shrink-0 px-2 py-0.5 rounded-full text-[10px] font-semibold" style={{ backgroundColor: colors.bg, color: colors.text }}>
+                      {COMPLIANCE_STATUS_LABELS[status]}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* ─── Bottom Action Bar ──────────────────────────────────────────── */}
