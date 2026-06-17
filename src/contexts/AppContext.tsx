@@ -242,16 +242,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const userRef = useRef<User | null>(null);
   useEffect(() => { userRef.current = user; }, [user]);
 
+  // Navigation
+  const [currentView, setCurrentViewState] = useState<ViewType>('home');
+  const [selectedSupplierId, setSelectedSupplierId] = useState<string | null>(null);
+
   // Logout guard — if the user signs out while on a protected view, send them home.
   useEffect(() => {
     if (!user && !isLoading && PROTECTED_VIEWS.has(currentView)) {
       setCurrentViewState('home');
     }
   }, [user, isLoading, currentView]);
-
-  // Navigation
-  const [currentView, setCurrentViewState] = useState<ViewType>('home');
-  const [selectedSupplierId, setSelectedSupplierId] = useState<string | null>(null);
   
   // Wishlist
   const [wishlist, setWishlist] = useState<string[]>([]);

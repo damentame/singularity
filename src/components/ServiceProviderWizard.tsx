@@ -198,7 +198,14 @@ const ServiceProviderWizard: React.FC<ServiceProviderWizardProps> = ({ onClose, 
     publicLiabilityAmount: '',
     policyNumber: '',
     expiryDate: '',
-    
+
+    // Step 6b: Backup & Contingency Plans
+    hasBackupEquipment: false,
+    backupEquipmentDetails: '',
+    hasBackupTeam: false,
+    weatherContingencyPlan: '',
+    cancellationPolicy: '',
+
     // Portfolio
     portfolioImages: [] as File[],
   });
@@ -1975,6 +1982,108 @@ const ServiceProviderWizard: React.FC<ServiceProviderWizardProps> = ({ onClose, 
                   </div>
                 </div>
               )}
+            </div>
+
+            {/* ─── Backup & Contingency Plans ─────────────────────────── */}
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-xl font-light tracking-wide mb-1" style={{ fontFamily: '"Playfair Display", Georgia, serif', color: '#FFFFFF' }}>
+                  Backup & Contingency Plans
+                </h3>
+                <p className="text-white/50 text-sm" style={{ fontFamily: '"Inter", sans-serif' }}>
+                  Help clients understand how you handle unexpected situations
+                </p>
+              </div>
+
+              {/* Backup Equipment */}
+              <div className="space-y-3">
+                <button
+                  type="button"
+                  onClick={() => updateFormData('hasBackupEquipment', !formData.hasBackupEquipment)}
+                  className={`w-full p-4 rounded-xl border transition-all text-left flex items-center gap-3 ${
+                    formData.hasBackupEquipment
+                      ? 'bg-gold/10 border-gold/50'
+                      : 'bg-white/5 border-white/10 hover:border-gold/30'
+                  }`}
+                >
+                  <div className={`w-5 h-5 rounded flex items-center justify-center border-2 transition-colors ${formData.hasBackupEquipment ? 'bg-gold border-gold' : 'border-white/30'}`}>
+                    {formData.hasBackupEquipment && <Check className="w-3 h-3 text-[#0B1426]" />}
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium" style={{ color: formData.hasBackupEquipment ? '#C9A24A' : '#FFFFFF', fontFamily: '"Inter", sans-serif' }}>
+                      I have backup equipment available
+                    </p>
+                    <p className="text-white/40 text-xs mt-0.5" style={{ fontFamily: '"Inter", sans-serif' }}>
+                      You keep spare or redundant equipment in case of failure
+                    </p>
+                  </div>
+                </button>
+                {formData.hasBackupEquipment && (
+                  <textarea
+                    value={formData.backupEquipmentDetails}
+                    onChange={(e) => updateFormData('backupEquipmentDetails', e.target.value)}
+                    placeholder="Describe your backup equipment setup (e.g. 'We carry a spare PA system and backup lighting rig for every event')"
+                    rows={3}
+                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-white/40 focus:outline-none focus:border-gold/50 text-sm resize-none"
+                    style={{ fontFamily: '"Inter", sans-serif' }}
+                  />
+                )}
+              </div>
+
+              {/* Backup Team */}
+              <div className="space-y-3">
+                <button
+                  type="button"
+                  onClick={() => updateFormData('hasBackupTeam', !formData.hasBackupTeam)}
+                  className={`w-full p-4 rounded-xl border transition-all text-left flex items-center gap-3 ${
+                    formData.hasBackupTeam
+                      ? 'bg-gold/10 border-gold/50'
+                      : 'bg-white/5 border-white/10 hover:border-gold/30'
+                  }`}
+                >
+                  <div className={`w-5 h-5 rounded flex items-center justify-center border-2 transition-colors ${formData.hasBackupTeam ? 'bg-gold border-gold' : 'border-white/30'}`}>
+                    {formData.hasBackupTeam && <Check className="w-3 h-3 text-[#0B1426]" />}
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium" style={{ color: formData.hasBackupTeam ? '#C9A24A' : '#FFFFFF', fontFamily: '"Inter", sans-serif' }}>
+                      I have backup staff / team members available
+                    </p>
+                    <p className="text-white/40 text-xs mt-0.5" style={{ fontFamily: '"Inter", sans-serif' }}>
+                      You can call in additional team members if primary staff are unavailable
+                    </p>
+                  </div>
+                </button>
+              </div>
+
+              {/* Weather Contingency */}
+              <div>
+                <label className="block text-sm uppercase tracking-widest text-gold mb-3" style={{ fontFamily: '"Inter", sans-serif' }}>
+                  Weather / Outdoor Contingency Plan
+                </label>
+                <textarea
+                  value={formData.weatherContingencyPlan}
+                  onChange={(e) => updateFormData('weatherContingencyPlan', e.target.value)}
+                  placeholder="Describe how you handle outdoor events when weather changes (e.g. 'We bring weatherproof covers for all equipment and can adapt setup within 30 minutes')"
+                  rows={3}
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-white/40 focus:outline-none focus:border-gold/50 text-sm resize-none"
+                  style={{ fontFamily: '"Inter", sans-serif' }}
+                />
+              </div>
+
+              {/* Cancellation Policy */}
+              <div>
+                <label className="block text-sm uppercase tracking-widest text-gold mb-3" style={{ fontFamily: '"Inter", sans-serif' }}>
+                  Cancellation & Rescheduling Policy
+                </label>
+                <textarea
+                  value={formData.cancellationPolicy}
+                  onChange={(e) => updateFormData('cancellationPolicy', e.target.value)}
+                  placeholder="Describe your cancellation terms (e.g. 'Full refund 30+ days before event, 50% within 30 days, non-refundable within 7 days')"
+                  rows={3}
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-white/40 focus:outline-none focus:border-gold/50 text-sm resize-none"
+                  style={{ fontFamily: '"Inter", sans-serif' }}
+                />
+              </div>
             </div>
 
             {/* Error Message */}

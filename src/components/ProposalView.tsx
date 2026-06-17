@@ -663,9 +663,25 @@ const ProposalView: React.FC<ProposalViewProps> = ({ event, onBack }) => {
 
               {/* Subtotal 3 */}
               <div className="flex justify-between items-baseline pt-1 border-t" style={{ borderColor: 'rgba(201,162,74,0.08)' }}>
-                <span className="text-xs font-semibold" style={{ color: '#555' }}>Subtotal 3 (Excl. {staged.vatName})</span>
+                <span className="text-xs font-semibold" style={{ color: '#555' }}>Subtotal 3</span>
                 <span className="text-sm font-medium" style={{ color: '#1A1A1A' }}>{fmt(staged.subtotal3)}</span>
               </div>
+
+              {/* Contingency */}
+              {staged.contingencyPercent > 0 && (
+                <div className="flex justify-between items-baseline pl-3">
+                  <span className="text-[11px] text-gray-400">Contingency @ {staged.contingencyPercent}%</span>
+                  <span className="text-xs text-gray-500">{fmt(staged.contingencyAmount)}</span>
+                </div>
+              )}
+
+              {/* Subtotal 3b — only shown when contingency is active */}
+              {staged.contingencyPercent > 0 && (
+                <div className="flex justify-between items-baseline pt-1 border-t" style={{ borderColor: 'rgba(201,162,74,0.08)' }}>
+                  <span className="text-xs font-semibold" style={{ color: '#555' }}>Subtotal (Excl. {staged.vatName})</span>
+                  <span className="text-sm font-medium" style={{ color: '#1A1A1A' }}>{fmt(staged.subtotal3b)}</span>
+                </div>
+              )}
 
               {/* VAT */}
               {staged.vatRate > 0 && (

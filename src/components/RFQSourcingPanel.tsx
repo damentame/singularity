@@ -308,7 +308,7 @@ const RFQSourcingPanel: React.FC<RFQSourcingPanelProps> = ({ event }) => {
         const batch = batches.find(b => b.id === showEmailModal);
         if (!batch) return null;
         const portalUrl = getPortalUrl(batch.portalToken);
-        const emailBody = `Dear ${batch.supplierName},\n\nWe would like to request a quotation for an upcoming event.\n\nEvent: ${getEventDisplayName(event)}\nDate: ${event.date || 'TBC'}\nLocation: ${event.city || ''}, ${event.country || ''}\nItems: ${getItemsForBatch(batch.id).length} items\n\nPlease use the secure portal link below to view items and submit your quote:\n${portalUrl}\n\nThis link is long-lived — you can return at any time to update your prices.\n\n${batch.messageToSupplier ? `Note: ${batch.messageToSupplier}\n\n` : ''}Thank you.`;
+        const emailBody = `Dear ${batch.supplierName},\n\nWe would like to request a tax invoice for an upcoming event.\n\nEvent: ${getEventDisplayName(event)}\nDate: ${event.date || 'TBC'}\nLocation: ${event.city || ''}, ${event.country || ''}\nItems: ${getItemsForBatch(batch.id).length} items\n\nPlease use the secure portal link below to view items and submit your tax invoice:\n${portalUrl}\n\nThis link is long-lived — you can return at any time to update your prices.\n\n${batch.messageToSupplier ? `Note: ${batch.messageToSupplier}\n\n` : ''}Thank you.`;
 
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setShowEmailModal(null)}>

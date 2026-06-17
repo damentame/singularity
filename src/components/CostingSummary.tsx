@@ -96,9 +96,23 @@ const CostingSummary: React.FC<CostingSummaryProps> = ({ summary, itemCount, gue
           )}
 
           <div className="flex justify-between items-baseline pt-1 border-t" style={{ borderColor: 'rgba(201,162,74,0.08)' }}>
-            <span className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: '#888' }}>Subtotal 3 (Excl {staged.vatName})</span>
+            <span className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: '#888' }}>Subtotal 3</span>
             <span className="text-sm font-medium" style={{ color: '#1A1A1A' }}>{fmt(staged.subtotal3)}</span>
           </div>
+
+          {staged.contingencyPercent > 0 && (
+            <div className="flex justify-between items-baseline">
+              <span className="text-[10px] text-gray-400 pl-2">Contingency @ {staged.contingencyPercent}%</span>
+              <span className="text-xs text-gray-500">{fmt(staged.contingencyAmount)}</span>
+            </div>
+          )}
+
+          {staged.contingencyPercent > 0 && (
+            <div className="flex justify-between items-baseline pt-1 border-t" style={{ borderColor: 'rgba(201,162,74,0.08)' }}>
+              <span className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: '#888' }}>Subtotal (Excl {staged.vatName})</span>
+              <span className="text-sm font-medium" style={{ color: '#1A1A1A' }}>{fmt(staged.subtotal3b)}</span>
+            </div>
+          )}
 
           {staged.vatRate > 0 && (
             <div className="flex justify-between items-baseline">

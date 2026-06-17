@@ -718,6 +718,9 @@ export interface PlannerEvent {
   billingCurrency: string;             // ISO currency code for client billing
   vatEnabled: boolean;                 // toggle VAT on/off for this event
   showPricing: boolean;                // pricing visibility toggle (persisted)
+  // v13: Contingency & Backup Plans
+  contingencyPercent: number;          // % applied after Subtotal 3, before VAT (0 = disabled)
+  contingencyNotes: string;            // Wet weather / backup plan description
 }
 
 
@@ -1083,6 +1086,9 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       billingCurrency: countryConfig.currencyIso,
       vatEnabled: countryConfig.vatRate > 0,
       showPricing: true,
+      // v13: Contingency & Backup Plans
+      contingencyPercent: 0,
+      contingencyNotes: '',
     };
 
 

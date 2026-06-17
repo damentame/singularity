@@ -1,10 +1,10 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 
 import {
-  Save, FileText, Send, Inbox, History, CheckCircle2, ShoppingCart, Receipt,
+  Save, FileText, Send, Inbox, History, CheckCircle2, ShoppingCart,
   Layers, Shield, Package, BookTemplate, Clock, User, Image, BarChart3,
   Eye, EyeOff, Globe, ChevronDown, Loader2, Mail, AlertCircle, Hash,
-  Users, Plus, GitCompare, ShieldCheck,
+  Users, Plus, GitCompare, ShieldCheck, Search, MapPin, Tag, Receipt,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { seedDemoAlerts } from '@/data/priceAlertStore';
@@ -19,6 +19,7 @@ import {
 import { getCountryByCode } from '@/data/countries';
 import { getCurrencySymbol, CURRENCY_OPTIONS, COUNTRY_FINANCE_CONFIGS } from '@/data/countryConfig';
 import { getBatchesForEvent, getLatestSubmitted } from '@/data/rfqStore';
+import { searchAppSuppliers, AppSupplier } from '@/lib/supplierDirectory';
 
 
 import CoordinatorHeader from './CoordinatorHeader';
@@ -39,13 +40,14 @@ import FullCostingView from './FullCostingView';
 import SupplierQuoteReview from './SupplierQuoteReview';
 import SupplierQuoteComparison from './SupplierQuoteComparison';
 import ComplianceDocumentsTab from './ComplianceDocumentsTab';
+import ReceiptsTab from './ReceiptsTab';
 import { toast } from '@/components/ui/use-toast';
 import { useAppContext } from '@/contexts/AppContext';
 
 
 const GOLD = '#C9A24A';
 
-type OperationsTab = 'sub-events' | 'timeline' | 'costing' | 'tasks' | 'shopping' | 'orders' | 'control-tower' | 'sourcing' | 'compare' | 'compliance';
+type OperationsTab = 'sub-events' | 'timeline' | 'costing' | 'tasks' | 'shopping' | 'orders' | 'control-tower' | 'sourcing' | 'compare' | 'compliance' | 'receipts';
 
 
 interface EventDetailProps {
@@ -78,6 +80,33 @@ const EventDetail: React.FC<EventDetailProps> = ({ eventId, onBack, onGeneratePr
   const [showSaveVersion, setShowSaveVersion] = useState(false);
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [showQuoteReview, setShowQuoteReview] = useState(false);
+  const [supplierTab, setSupplierTab] = useState<'app' | 'manual'>('app');
+  const [appSuppliers, setAppSuppliers] = useState<AppSupplier[]>([]);
+  const [appSuppliersLoading, setAppSuppliersLoading] = useState(false);
+  const [supplierQuery, setSupplierQuery] = useState('');
+  const [selectedAppSupplier, setSelectedAppSupplier] = useState<AppSupplier | null>(null);
+
+  // Load app suppliers when modal opens
+  useEffect(() => {
+    if (!showRFQ || !event) return;
+    setSupplierTab('app');
+    setSupplierQuery('');
+    setSelectedAppSupplier(null);
+    const targetItem = event.lineItems.find(i => i.id === rfqTarget);
+    let cancelled = false;
+    setAppSuppliersLoading(true);
+    searchAppSuppliers({
+      country: event.country || '',
+      city: event.city || '',
+      category: targetItem?.category,
+    }).then(results => {
+      if (!cancelled) {
+        setAppSuppliers(results);
+        setAppSuppliersLoading(false);
+      }
+    });
+    return () => { cancelled = true; };
+  }, [showRFQ, rfqTarget]);
 
   if (!event) return null;
 
@@ -114,6 +143,7 @@ const EventDetail: React.FC<EventDetailProps> = ({ eventId, onBack, onGeneratePr
     setRfqTarget(lineItemId);
     setRfqName('');
     setRfqEmail('');
+    setSelectedAppSupplier(null);
     setShowRFQ(true);
   };
 
@@ -166,12 +196,13 @@ const EventDetail: React.FC<EventDetailProps> = ({ eventId, onBack, onGeneratePr
     const item = event.lineItems.find(i => i.id === rfqTarget);
     toast({
       title: 'Supplier Assigned',
-      description: `${rfqName.trim()} assigned to "${item?.name || 'item'}". Review & send from the Quote Requests panel.`,
+      description: `${rfqName.trim()} assigned to "${item?.name || 'item'}". Review & send from the Tax Invoice Requests panel.`,
     });
 
     setRfqTarget(null);
     setRfqName('');
     setRfqEmail('');
+    setSelectedAppSupplier(null);
     setShowRFQ(false);
   };
 
@@ -190,12 +221,13 @@ const EventDetail: React.FC<EventDetailProps> = ({ eventId, onBack, onGeneratePr
     { key: 'timeline', label: 'Timeline', icon: <Clock className="w-3.5 h-3.5" /> },
     { key: 'costing', label: 'Full Costing', icon: <BarChart3 className="w-3.5 h-3.5" /> },
     { key: 'sourcing', label: 'Sourcing', icon: <Package className="w-3.5 h-3.5" /> },
-    { key: 'compare', label: 'Compare', icon: <GitCompare className="w-3.5 h-3.5" />, badge: quotedBatchCount },
+    { key: 'compare', label: 'Tax Invoices', icon: <GitCompare className="w-3.5 h-3.5" />, badge: quotedBatchCount },
     { key: 'control-tower', label: 'Control Tower', icon: <Shield className="w-3.5 h-3.5" /> },
     { key: 'tasks', label: 'Tasks', icon: <CheckCircle2 className="w-3.5 h-3.5" />, badge: todoCount },
     { key: 'shopping', label: 'Shopping', icon: <ShoppingCart className="w-3.5 h-3.5" />, badge: shoppingCount },
     { key: 'orders', label: 'Orders', icon: <Receipt className="w-3.5 h-3.5" />, badge: orderCount },
     { key: 'compliance', label: 'Compliance', icon: <ShieldCheck className="w-3.5 h-3.5" /> },
+    { key: 'receipts', label: 'Receipts', icon: <Receipt className="w-3.5 h-3.5" /> },
   ];
 
 
@@ -233,7 +265,7 @@ const EventDetail: React.FC<EventDetailProps> = ({ eventId, onBack, onGeneratePr
                       {pendingAssignments.length} item{pendingAssignments.length !== 1 ? 's' : ''} ready for quoting
                     </h3>
                     <p className="text-[10px] text-gray-400 mt-0.5">
-                      {pendingSupplierCount} supplier{pendingSupplierCount !== 1 ? 's' : ''} assigned — review and send bundled quote requests
+                      {pendingSupplierCount} supplier{pendingSupplierCount !== 1 ? 's' : ''} assigned — review and send bundled tax invoice requests
                     </p>
                   </div>
                 </div>
@@ -319,6 +351,7 @@ const EventDetail: React.FC<EventDetailProps> = ({ eventId, onBack, onGeneratePr
                 {activeTab === 'compare' && <SupplierQuoteComparison event={event} />}
                 {activeTab === 'control-tower' && <ControlTowerDashboard event={event} />}
                 {activeTab === 'compliance' && <ComplianceDocumentsTab eventId={event.id} />}
+                {activeTab === 'receipts' && <ReceiptsTab eventId={event.id} currency={event.currency} />}
 
               </div>
             </div>
@@ -380,7 +413,7 @@ const EventDetail: React.FC<EventDetailProps> = ({ eventId, onBack, onGeneratePr
                   backgroundColor: pendingAssignments.length > 0 ? 'rgba(59,130,246,0.04)' : 'transparent',
                 }}
               >
-                <Send className="w-3.5 h-3.5" /> Review Quote Requests
+                <Send className="w-3.5 h-3.5" /> Review Tax Invoice Requests
                 {pendingAssignments.length > 0 && (
                   <span className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-blue-500 text-white text-[9px] font-bold flex items-center justify-center">
                     {pendingAssignments.length}
@@ -505,6 +538,24 @@ const EventDetail: React.FC<EventDetailProps> = ({ eventId, onBack, onGeneratePr
                   </button>
                 </div>
 
+                {/* Contingency % */}
+                <div className="pt-2 border-t" style={{ borderColor: 'rgba(201,162,74,0.08)' }}>
+                  <label className="text-[10px] uppercase tracking-wider text-gray-400 block mb-1">Contingency %</label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      step={0.5}
+                      value={event.contingencyPercent ?? 0}
+                      onChange={(e) => updateEvent(eventId, { contingencyPercent: Math.max(0, Math.min(100, parseFloat(e.target.value) || 0)) })}
+                      className="w-20 px-2.5 py-1.5 rounded-lg border text-xs outline-none text-right"
+                      style={{ borderColor: '#EFEFEF', color: '#1A1A1A' }}
+                    />
+                    <span className="text-xs text-gray-400">% applied after Subtotal 3</span>
+                  </div>
+                </div>
+
                 {/* Pricing Visibility */}
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-gray-600">Show Pricing</span>
@@ -531,7 +582,7 @@ const EventDetail: React.FC<EventDetailProps> = ({ eventId, onBack, onGeneratePr
                   <span style={{ color: '#1A1A1A' }}>{subEventCount}</span>
                 </div>
                 <div className="flex items-center justify-between text-xs">
-                  <span className="text-gray-500 flex items-center gap-1"><Package className="w-3 h-3" /> Pending Quotes</span>
+                  <span className="text-gray-500 flex items-center gap-1"><Package className="w-3 h-3" /> Pending Tax Invoices</span>
                   <span style={{ color: pendingAssignments.length > 0 ? '#3B82F6' : '#1A1A1A' }}>
                     {pendingAssignments.length} item{pendingAssignments.length !== 1 ? 's' : ''} / {pendingSupplierCount} supplier{pendingSupplierCount !== 1 ? 's' : ''}
                   </span>
@@ -555,14 +606,22 @@ const EventDetail: React.FC<EventDetailProps> = ({ eventId, onBack, onGeneratePr
         </div>
       </div>
 
-      {/* Hire My Supplier Modal — Now assigns supplier to line item */}
+      {/* Hire My Supplier Modal — tabbed: app suppliers + manual entry */}
       {showRFQ && rfqTarget && (() => {
         const targetItem = event.lineItems.find(i => i.id === rfqTarget);
         const targetMoment = targetItem?.momentId ? (event.moments || []).find(m => m.id === targetItem.momentId) : null;
-        // Check if already assigned
         const existingAssignment = (event.supplierAssignments || []).find(
           a => a.lineItemId === rfqTarget && a.status === 'PENDING'
         );
+        const q = supplierQuery.toLowerCase();
+        const filteredSuppliers = q
+          ? appSuppliers.filter(s =>
+              s.businessName.toLowerCase().includes(q) ||
+              s.tradingName.toLowerCase().includes(q) ||
+              s.city.toLowerCase().includes(q) ||
+              s.categories.some(c => c.toLowerCase().includes(q))
+            )
+          : appSuppliers;
 
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setShowRFQ(false)}>
@@ -619,7 +678,106 @@ const EventDetail: React.FC<EventDetailProps> = ({ eventId, onBack, onGeneratePr
                 </div>
               )}
 
-              <div className="space-y-3">
+              {/* Tab switcher */}
+              <div className="flex gap-1 p-1 rounded-xl mb-3" style={{ backgroundColor: 'rgba(0,0,0,0.04)' }}>
+                <button
+                  onClick={() => setSupplierTab('app')}
+                  className="flex-1 py-1.5 rounded-lg text-[10px] font-medium transition-all"
+                  style={supplierTab === 'app' ? { backgroundColor: '#fff', color: GOLD, boxShadow: '0 1px 3px rgba(0,0,0,0.08)' } : { color: '#9CA3AF' }}
+                >
+                  App Suppliers {!appSuppliersLoading && appSuppliers.length > 0 && <span className="ml-1 opacity-60">({appSuppliers.length})</span>}
+                </button>
+                <button
+                  onClick={() => setSupplierTab('manual')}
+                  className="flex-1 py-1.5 rounded-lg text-[10px] font-medium transition-all"
+                  style={supplierTab === 'manual' ? { backgroundColor: '#fff', color: '#1A1A1A', boxShadow: '0 1px 3px rgba(0,0,0,0.08)' } : { color: '#9CA3AF' }}
+                >
+                  Enter Manually
+                </button>
+              </div>
+
+              {supplierTab === 'app' ? (
+                <div>
+                  {/* Search input */}
+                  <div className="relative mb-2">
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400" />
+                    <input
+                      type="text"
+                      value={supplierQuery}
+                      onChange={(e) => setSupplierQuery(e.target.value)}
+                      placeholder="Search by name, city or category…"
+                      className="w-full pl-7 pr-3 py-2 rounded-lg border text-xs outline-none"
+                      style={{ borderColor: '#EFEFEF', color: '#1A1A1A' }}
+                    />
+                  </div>
+
+                  {appSuppliersLoading ? (
+                    <div className="flex items-center justify-center py-8 text-gray-400">
+                      <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                      <span className="text-xs">Finding suppliers in {event.city || event.country}…</span>
+                    </div>
+                  ) : filteredSuppliers.length === 0 ? (
+                    <div className="text-center py-6">
+                      <Users className="w-8 h-8 text-gray-200 mx-auto mb-2" />
+                      <p className="text-xs text-gray-400">
+                        {appSuppliers.length === 0
+                          ? 'No app suppliers found for this area yet'
+                          : 'No suppliers match your search'}
+                      </p>
+                      <button onClick={() => setSupplierTab('manual')} className="text-[10px] mt-1 underline" style={{ color: GOLD }}>
+                        Enter supplier manually →
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5 max-h-52 overflow-y-auto pr-0.5">
+                      {filteredSuppliers.map(s => {
+                        const isSelected = selectedAppSupplier?.userId === s.userId;
+                        return (
+                          <button
+                            key={s.userId}
+                            onClick={() => {
+                              setSelectedAppSupplier(s);
+                              setRfqName(s.businessName || s.tradingName);
+                              setRfqEmail(s.email);
+                            }}
+                            className="w-full text-left p-2.5 rounded-xl border transition-all"
+                            style={{
+                              borderColor: isSelected ? 'rgba(201,162,74,0.4)' : 'rgba(0,0,0,0.06)',
+                              backgroundColor: isSelected ? 'rgba(201,162,74,0.05)' : 'rgba(0,0,0,0.01)',
+                            }}
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex-1 min-w-0">
+                                <p className="text-[11px] font-semibold text-gray-800 truncate">{s.businessName || s.tradingName}</p>
+                                {s.tradingName && s.tradingName !== s.businessName && (
+                                  <p className="text-[9px] text-gray-400 truncate">t/a {s.tradingName}</p>
+                                )}
+                                <div className="flex items-center gap-2.5 mt-1 flex-wrap">
+                                  {(s.city || s.country) && (
+                                    <span className="flex items-center gap-0.5 text-[9px] text-gray-400">
+                                      <MapPin className="w-2.5 h-2.5" />
+                                      {s.city ? `${s.city}, ${s.country}` : s.country}
+                                    </span>
+                                  )}
+                                  {s.categories.length > 0 && (
+                                    <span className="flex items-center gap-0.5 text-[9px] text-gray-400">
+                                      <Tag className="w-2.5 h-2.5" />
+                                      {s.categories.slice(0, 3).join(', ')}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              {isSelected && (
+                                <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: GOLD }} />
+                              )}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              ) : (
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="text-[10px] uppercase tracking-wider text-gray-400 block mb-1">Supplier Name *</label>
@@ -635,7 +793,20 @@ const EventDetail: React.FC<EventDetailProps> = ({ eventId, onBack, onGeneratePr
                       onKeyDown={(e) => { if (e.key === 'Enter') handleAssignSupplier(); }} />
                   </div>
                 </div>
-              </div>
+              )}
+
+              {/* Selected supplier summary (app tab) */}
+              {supplierTab === 'app' && selectedAppSupplier && (
+                <div className="mt-3 p-2.5 rounded-lg flex items-center gap-2" style={{ backgroundColor: 'rgba(201,162,74,0.04)', border: '1px solid rgba(201,162,74,0.15)' }}>
+                  <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0" style={{ color: GOLD }} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[10px] font-medium truncate" style={{ color: '#1A1A1A' }}>{selectedAppSupplier.businessName}</p>
+                    {selectedAppSupplier.email && (
+                      <p className="text-[9px] text-gray-400 truncate">{selectedAppSupplier.email}</p>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* How it works */}
               <div className="mt-4 mb-4 p-3 rounded-lg" style={{ backgroundColor: '#FAFAF7', border: '1px solid rgba(0,0,0,0.04)' }}>

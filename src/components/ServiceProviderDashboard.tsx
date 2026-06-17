@@ -1713,12 +1713,12 @@ const ServiceProviderDashboard: React.FC = () => {
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div>
-              <label className="text-white/70 text-sm block mb-2">Quote Amount ($)</label>
+              <label className="text-white/70 text-sm block mb-2">Tax Invoice Amount ($)</label>
               <Input
                 type="number"
                 value={quoteAmount}
                 onChange={(e) => setQuoteAmount(e.target.value)}
-                placeholder="Enter your quote amount"
+                placeholder="Enter your tax invoice amount"
                 className="bg-white/10 border-white/20 text-white placeholder:text-white/40"
               />
             </div>
@@ -1727,7 +1727,7 @@ const ServiceProviderDashboard: React.FC = () => {
               <Textarea
                 value={quoteMessage}
                 onChange={(e) => setQuoteMessage(e.target.value)}
-                placeholder="Add details about your quote, inclusions, terms..."
+                placeholder="Add details about your tax invoice, inclusions, terms..."
                 className="bg-white/10 border-white/20 text-white placeholder:text-white/40 min-h-[100px]"
               />
             </div>

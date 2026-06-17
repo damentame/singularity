@@ -380,7 +380,7 @@ const SupplierPortal: React.FC = () => {
       <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#F5F4F0' }}>
         <div className="text-center">
           <Loader2 className="w-8 h-8 animate-spin mx-auto mb-3" style={{ color: GOLD }} />
-          <p className="text-sm text-gray-400">Loading your quote portal…</p>
+          <p className="text-sm text-gray-400">Loading your tax invoice portal…</p>
         </div>
       </div>
     );
@@ -394,8 +394,8 @@ const SupplierPortal: React.FC = () => {
           <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-5" style={{ backgroundColor: 'rgba(201,162,74,0.1)' }}>
             <Shield className="w-7 h-7" style={{ color: GOLD }} />
           </div>
-          <h1 className="text-xl font-semibold mb-2" style={{ color: '#1A1A1A' }}>Supplier Quote Portal</h1>
-          <p className="text-sm text-gray-500 mb-6">This link is invalid, expired, or the RFQ has been removed.</p>
+          <h1 className="text-xl font-semibold mb-2" style={{ color: '#1A1A1A' }}>Tax Invoice Portal</h1>
+          <p className="text-sm text-gray-500 mb-6">This link is invalid, expired, or the request has been removed.</p>
           <div className="p-4 rounded-xl bg-white border" style={{ borderColor: 'rgba(201,162,74,0.15)' }}>
             <p className="text-xs text-gray-400">If you believe this is an error, please contact the event coordinator who sent you the RFQ email.</p>
           </div>
@@ -419,7 +419,7 @@ const SupplierPortal: React.FC = () => {
               <div>
                 <div className="flex items-center gap-2">
                   <h1 className="text-sm font-bold" style={{ color: '#1A1A1A' }}>
-                    Quote Request — {event.jobCode || 'RFQ'}
+                    Tax Invoice Request — {event.jobCode || 'RFQ'}
                   </h1>
                   <span
                     className="text-[9px] font-semibold px-2.5 py-0.5 rounded-full text-white"
@@ -471,7 +471,7 @@ const SupplierPortal: React.FC = () => {
                     style={{ backgroundColor: '#22C55E' }}
                   >
                     {submitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
-                    Submit Quote
+                    Submit Tax Invoice
                   </button>
                 </>
               )}
@@ -505,7 +505,7 @@ const SupplierPortal: React.FC = () => {
           <div className="mb-4 p-4 rounded-xl bg-green-50 border border-green-200 flex items-center gap-3">
             <CheckCircle2 className="w-5 h-5 text-green-600 flex-shrink-0" />
             <div>
-              <span className="text-sm text-green-700 font-semibold block">Quote {batch.status.toLowerCase()}</span>
+              <span className="text-sm text-green-700 font-semibold block">Tax Invoice {batch.status.toLowerCase()}</span>
               <span className="text-xs text-green-600">Your pricing has been locked. No further changes can be made.</span>
             </div>
           </div>
@@ -516,7 +516,7 @@ const SupplierPortal: React.FC = () => {
             <CheckCircle2 className="w-5 h-5 text-blue-600 flex-shrink-0" />
             <div>
               <span className="text-sm text-blue-700 font-semibold block">
-                Quote submitted successfully (v{batch.currentSubmittedVersion})
+                Tax Invoice submitted successfully (v{batch.currentSubmittedVersion})
               </span>
               <span className="text-xs text-blue-600">
                 Your pricing has been automatically applied to the event costing. You can still update and resubmit.
@@ -733,7 +733,7 @@ const SupplierPortal: React.FC = () => {
           <div>
             <span className="text-xs font-semibold text-blue-700 block">Automatic Price Mapping</span>
             <p className="text-[10px] text-blue-600 mt-0.5 leading-relaxed">
-              When you submit your quote, your pricing is automatically mapped back to each line item in the event costing using secure reference IDs. 
+              When you submit your tax invoice, your pricing is automatically mapped back to each line item in the event costing using secure reference IDs.
               The coordinator's event budget updates in real-time — no manual re-entry required.
             </p>
           </div>
@@ -911,7 +911,7 @@ const SupplierPortal: React.FC = () => {
                 style={{ backgroundColor: '#22C55E' }}
               >
                 {submitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
-                Submit Quote {batch.currentSubmittedVersion > 0 ? `(v${batch.currentSubmittedVersion + 1})` : ''}
+                Submit Tax Invoice {batch.currentSubmittedVersion > 0 ? `(v${batch.currentSubmittedVersion + 1})` : ''}
               </button>
             </div>
           </div>
@@ -938,10 +938,10 @@ const SupplierPortal: React.FC = () => {
             <div className="w-12 h-12 rounded-xl flex items-center justify-center mx-auto mb-4" style={{ backgroundColor: 'rgba(34,197,94,0.1)' }}>
               <Send className="w-5 h-5 text-green-600" />
             </div>
-            <h3 className="text-lg font-bold text-center mb-1" style={{ color: '#1A1A1A' }}>Submit Your Quote?</h3>
+            <h3 className="text-lg font-bold text-center mb-1" style={{ color: '#1A1A1A' }}>Submit Your Tax Invoice?</h3>
             <p className="text-xs text-gray-500 text-center mb-5">
               {batch.currentSubmittedVersion > 0
-                ? `This will submit version ${batch.currentSubmittedVersion + 1} of your quote, replacing the previous submission.`
+                ? `This will submit version ${batch.currentSubmittedVersion + 1} of your tax invoice, replacing the previous submission.`
                 : 'Your pricing will be sent to the event coordinator and automatically applied to the event costing.'
               }
             </p>
