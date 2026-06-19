@@ -1,5 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
-import { supabase } from '@/lib/supabase';
+import { useState, useCallback } from 'react';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -99,69 +98,9 @@ export function useConfigOptions(groupKey: string): {
   getColor: (valueKey: string) => string | null;
   makeSelection: (valueKey: string, customLabel?: string) => ConfigOptionSelection;
 } {
-  const [options, setOptions] = useState<OptionItem[]>(() => {
-    // Return cached or local defaults immediately
-    if (optionCache[groupKey] && Date.now() - optionCache[groupKey].fetchedAt < CACHE_TTL) {
-      return optionCache[groupKey].data;
-    }
-    return LOCAL_DEFAULTS[groupKey] || [];
-  });
-  const [loading, setLoading] = useState(false);
-  const [allowCustom, setAllowCustom] = useState(true);
-
-  useEffect(() => {
-    // Check cache first
-    if (optionCache[groupKey] && Date.now() - optionCache[groupKey].fetchedAt < CACHE_TTL) {
-      setOptions(optionCache[groupKey].data);
-      return;
-    }
-
-    let cancelled = false;
-    setLoading(true);
-
-    (async () => {
-      try {
-        const { data, error } = await supabase
-          .from('option_items')
-          .select('*')
-          .eq('group_key', groupKey)
-          .eq('is_active', true)
-          .order('sort_order', { ascending: true });
-
-        if (error || !data || data.length === 0) {
-          // Fall back to local defaults
-          if (!cancelled) {
-            setOptions(LOCAL_DEFAULTS[groupKey] || []);
-          }
-          return;
-        }
-
-        const mapped: OptionItem[] = data.map((row: any) => ({
-          id: row.id,
-          groupKey: row.group_key,
-          valueKey: row.value_key,
-          displayLabel: row.display_label,
-          sortOrder: row.sort_order,
-          colorTag: row.color_tag,
-          isActive: row.is_active,
-        }));
-
-        optionCache[groupKey] = { data: mapped, fetchedAt: Date.now() };
-
-        if (!cancelled) {
-          setOptions(mapped);
-        }
-      } catch {
-        if (!cancelled) {
-          setOptions(LOCAL_DEFAULTS[groupKey] || []);
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-
-    return () => { cancelled = true; };
-  }, [groupKey]);
+  const [options] = useState<OptionItem[]>(() => LOCAL_DEFAULTS[groupKey] || []);
+  const loading = false;
+  const [allowCustom] = useState(true);
 
   const getLabel = useCallback((valueKey: string): string => {
     const found = options.find(o => o.valueKey === valueKey);

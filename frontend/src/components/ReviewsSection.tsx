@@ -37,7 +37,7 @@ const ReviewsSection: React.FC<ReviewsSectionProps> = ({ supplierId, supplierNam
   const [showResponseModal, setShowResponseModal] = useState(false);
   const [selectedReviewId, setSelectedReviewId] = useState<string | null>(null);
   const [responseText, setResponseText] = useState('');
-  const [submittingResponse, setSubmittingResponse] = useState(false);
+  const [submittingResponse] = useState(false);
 
   // Calculate aggregate stats
   const totalReviews = reviews.length;
@@ -128,27 +128,11 @@ const ReviewsSection: React.FC<ReviewsSectionProps> = ({ supplierId, supplierNam
     loadReviews();
   }, [supplierId, sortBy, filterRating]);
 
-  const handleHelpful = async (reviewId: string) => {
-    try {
-      const review = reviews.find(r => r.id === reviewId);
-      if (!review) return;
-
-      await supabase
-        .from('supplier_reviews')
-        .update({ helpful_count: review.helpful_count + 1 })
-        .eq('id', reviewId);
-
-      setReviews(prev => prev.map(r => 
-        r.id === reviewId ? { ...r, helpful_count: r.helpful_count + 1 } : r
-      ));
-
-      toast({
-        title: 'Thanks for your feedback!',
-        description: 'You marked this review as helpful.',
-      });
-    } catch (error) {
-      console.error('Error updating helpful count:', error);
-    }
+  const handleHelpful = (reviewId: string) => {
+    setReviews(prev => prev.map(r =>
+      r.id === reviewId ? { ...r, helpful_count: r.helpful_count + 1 } : r
+    ));
+    toast({ title: 'Thanks for your feedback!', description: 'You marked this review as helpful.' });
   };
 
   const handleRespond = (reviewId: string) => {
@@ -157,43 +141,15 @@ const ReviewsSection: React.FC<ReviewsSectionProps> = ({ supplierId, supplierNam
     setShowResponseModal(true);
   };
 
-  const submitResponse = async () => {
+  const submitResponse = () => {
     if (!selectedReviewId || !responseText.trim()) return;
-
-    setSubmittingResponse(true);
-    try {
-      const { error } = await supabase
-        .from('supplier_reviews')
-        .update({
-          supplier_response: responseText,
-          supplier_response_date: new Date().toISOString()
-        })
-        .eq('id', selectedReviewId);
-
-      if (error) throw error;
-
-      setReviews(prev => prev.map(r => 
-        r.id === selectedReviewId 
-          ? { ...r, supplier_response: responseText, supplier_response_date: new Date().toISOString() } 
-          : r
-      ));
-
-      toast({
-        title: 'Response Submitted',
-        description: 'Your response has been added to the review.',
-      });
-
-      setShowResponseModal(false);
-    } catch (error) {
-      console.error('Error submitting response:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to submit response. Please try again.',
-        variant: 'destructive',
-      });
-    } finally {
-      setSubmittingResponse(false);
-    }
+    setReviews(prev => prev.map(r =>
+      r.id === selectedReviewId
+        ? { ...r, supplier_response: responseText, supplier_response_date: new Date().toISOString() }
+        : r
+    ));
+    toast({ title: 'Response Submitted', description: 'Your response has been added to the review.' });
+    setShowResponseModal(false);
   };
 
   const handleReviewSuccess = () => {

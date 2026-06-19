@@ -39,7 +39,7 @@ const SupplierProfile: React.FC = () => {
   const [selectedSubVenue, setSelectedSubVenue] = useState<string | null>(null);
   const [activeMediaTab, setActiveMediaTab] = useState<'photos' | 'floorplans' | 'rooms' | 'videos'>('photos');
   const [supplierMedia, setSupplierMedia] = useState<SupplierMedia[]>([]);
-  const [loadingMedia, setLoadingMedia] = useState(true);
+  const [loadingMedia] = useState(false);
   const [showDetailsPanel, setShowDetailsPanel] = useState(false);
   const [hidePricing, setHidePricing] = useState(false);
   const [showQuoteForm, setShowQuoteForm] = useState(false);
@@ -50,40 +50,6 @@ const SupplierProfile: React.FC = () => {
   const quoteFormRef = useRef<HTMLDivElement>(null);
 
   const supplier = suppliers.find(s => s.id === selectedSupplierId);
-
-  // Load supplier media from database
-  useEffect(() => {
-    const loadMedia = async () => {
-      if (!selectedSupplierId) return;
-      
-      try {
-        const { data, error } = await supabase
-          .from('supplier_media')
-          .select('*')
-          .eq('supplier_id', selectedSupplierId)
-          .order('sort_order', { ascending: true });
-
-        if (error) {
-          if (error.code === '42P01' || error.message?.includes('does not exist')) {
-            setSupplierMedia([]);
-            return;
-          }
-          throw error;
-        }
-        
-        if (data) {
-          setSupplierMedia(data);
-        }
-      } catch (err) {
-        console.error('Error loading media:', err);
-        setSupplierMedia([]);
-      } finally {
-        setLoadingMedia(false);
-      }
-    };
-
-    loadMedia();
-  }, [selectedSupplierId]);
 
   // Load portfolio URLs and cover image from service_providers table
   useEffect(() => {

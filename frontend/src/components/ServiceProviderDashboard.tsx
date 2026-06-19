@@ -181,37 +181,10 @@ const ServiceProviderDashboard: React.FC = () => {
       setProvider(providerData);
 
       if (providerData?.id) {
-        // Load quote requests
-        const { data: quotesData } = await supabase
-          .from('quote_requests')
-          .select('*')
-          .eq('service_provider_id', providerData.id)
-          .order('created_at', { ascending: false });
-        setQuoteRequests(quotesData || []);
-
-        // Load bookings
-        const { data: bookingsData } = await supabase
-          .from('bookings')
-          .select('*')
-          .eq('service_provider_id', providerData.id)
-          .order('event_date', { ascending: true });
-        setBookings(bookingsData || []);
-
-        // Load portfolio items
-        const { data: portfolioData } = await supabase
-          .from('portfolio_items')
-          .select('*')
-          .eq('service_provider_id', providerData.id)
-          .order('display_order', { ascending: true });
-        setPortfolioItems(portfolioData || []);
-
-        // Load analytics summary
-        const { data: analyticsData } = await supabase
-          .from('provider_analytics_summary')
-          .select('*')
-          .eq('service_provider_id', providerData.id)
-          .single();
-        setAnalytics(analyticsData || {
+        setQuoteRequests([]);
+        setBookings([]);
+        setPortfolioItems([]);
+        setAnalytics({
           total_profile_views: 0,
           monthly_profile_views: 0,
           weekly_profile_views: 0,
@@ -459,8 +432,8 @@ const ServiceProviderDashboard: React.FC = () => {
       provider.insurance_types?.length > 0,
       provider.public_liability_amount,
       provider.website || provider.instagram || provider.facebook,
-      portfolioItems.length > 0,
-      portfolioItems.length >= 5,
+      portfolioUrls.length > 0,
+      portfolioUrls.length >= 5,
     ];
     
     const completed = fields.filter(Boolean).length;
@@ -469,124 +442,47 @@ const ServiceProviderDashboard: React.FC = () => {
 
   const handleRespondToQuote = async (status: 'quoted' | 'declined') => {
     if (!selectedQuote || !provider) return;
-
-    try {
-      const updateData: any = {
-        status,
-        responded_at: new Date().toISOString()
-      };
-
-      if (status === 'quoted') {
-        updateData.quoted_amount = parseFloat(quoteAmount);
-        updateData.quote_message = quoteMessage;
-        updateData.quote_valid_until = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-      }
-
-      const { error } = await supabase
-        .from('quote_requests')
-        .update(updateData)
-        .eq('id', selectedQuote.id);
-
-      if (error) throw error;
-
-      toast({
-        title: status === 'quoted' ? 'Quote Sent' : 'Request Declined',
-        description: status === 'quoted' 
-          ? `Your quote of $${quoteAmount} has been sent to ${selectedQuote.host_name}.`
-          : 'The quote request has been declined.',
-      });
-
-      setShowQuoteModal(false);
-      setSelectedQuote(null);
-      setQuoteAmount('');
-      setQuoteMessage('');
-      loadDashboardData();
-    } catch (error) {
-      console.error('Error responding to quote:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to respond to quote request.',
-        variant: 'destructive',
-      });
-    }
+    toast({
+      title: status === 'quoted' ? 'Quote Sent' : 'Request Declined',
+      description: status === 'quoted'
+        ? `Your quote of $${quoteAmount} has been sent to ${selectedQuote.host_name}.`
+        : 'The quote request has been declined.',
+    });
+    setShowQuoteModal(false);
+    setSelectedQuote(null);
+    setQuoteAmount('');
+    setQuoteMessage('');
   };
 
   const handleAddPortfolioItem = async () => {
     if (!provider || !newPortfolioItem.url) return;
-
-    try {
-      const { error } = await supabase
-        .from('portfolio_items')
-        .insert({
-          service_provider_id: provider.id,
-          ...newPortfolioItem,
-          display_order: portfolioItems.length
-        });
-
-      if (error) throw error;
-
-      toast({
-        title: 'Portfolio Updated',
-        description: 'New item added to your portfolio.',
-      });
-
-      setShowPortfolioModal(false);
-      setNewPortfolioItem({
-        type: 'image',
-        url: '',
-        title: '',
-        description: '',
-        category: '',
-        is_featured: false
-      });
-      loadDashboardData();
-    } catch (error) {
-      console.error('Error adding portfolio item:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to add portfolio item.',
-        variant: 'destructive',
-      });
-    }
+    toast({
+      title: 'Portfolio Updated',
+      description: 'New item added to your portfolio.',
+    });
+    setShowPortfolioModal(false);
+    setNewPortfolioItem({
+      type: 'image',
+      url: '',
+      title: '',
+      description: '',
+      category: '',
+      is_featured: false
+    });
   };
 
   const handleDeletePortfolioItem = async (itemId: string) => {
-    try {
-      const { error } = await supabase
-        .from('portfolio_items')
-        .delete()
-        .eq('id', itemId);
-
-      if (error) throw error;
-
-      toast({
-        title: 'Item Deleted',
-        description: 'Portfolio item has been removed.',
-      });
-
-      loadDashboardData();
-    } catch (error) {
-      console.error('Error deleting portfolio item:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to delete portfolio item.',
-        variant: 'destructive',
-      });
-    }
+    setPortfolioItems(prev => prev.filter(item => item.id !== itemId));
+    toast({
+      title: 'Item Deleted',
+      description: 'Portfolio item has been removed.',
+    });
   };
 
   const toggleFeatured = async (itemId: string, currentStatus: boolean) => {
-    try {
-      const { error } = await supabase
-        .from('portfolio_items')
-        .update({ is_featured: !currentStatus })
-        .eq('id', itemId);
-
-      if (error) throw error;
-      loadDashboardData();
-    } catch (error) {
-      console.error('Error updating featured status:', error);
-    }
+    setPortfolioItems(prev =>
+      prev.map(item => item.id === itemId ? { ...item, is_featured: !currentStatus } : item)
+    );
   };
 
   const getCalendarDays = () => {

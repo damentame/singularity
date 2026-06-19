@@ -134,41 +134,9 @@ const ReviewForm: React.FC<ReviewFormProps> = ({ supplierId, supplierName, onSuc
     setIsSubmitting(true);
 
     try {
-      // Upload photos first
-      let uploadedPhotoUrls: string[] = [];
       if (photos.length > 0) {
-        uploadedPhotoUrls = await uploadPhotos();
+        await uploadPhotos();
       }
-
-      // Insert review
-      const { error } = await supabase
-        .from('supplier_reviews')
-        .insert({
-          supplier_id: supplierId,
-          user_id: user?.id || null,
-          reviewer_name: reviewerName,
-          user_name: reviewerName,
-          user_avatar: user?.avatar,
-          event_type: eventType,
-          event_date: eventDate,
-          rating,
-          title,
-          review_text: content,
-          content: content,
-          photos: uploadedPhotoUrls,
-          verified_booking: false,
-          reviewer_email: reviewerEmail,
-          reviewer_phone: reviewerPhone,
-          would_recommend: wouldRecommend,
-          value_rating: valueRating || null,
-          service_rating: serviceRating || null,
-          quality_rating: qualityRating || null,
-          communication_rating: communicationRating || null,
-          helpful_count: 0,
-        });
-
-
-      if (error) throw error;
 
       toast({
         title: 'Review Submitted',

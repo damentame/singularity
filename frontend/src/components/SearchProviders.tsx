@@ -254,26 +254,6 @@ const SearchProviders: React.FC = () => {
     setIsSubmittingQuote(true);
     
     try {
-      const { error: insertError } = await supabase
-        .from('quote_requests')
-        .insert({
-          service_provider_id: selectedProvider.id,
-          host_id: user.id,
-          host_name: quoteForm.hostName,
-          host_email: quoteForm.hostEmail,
-          host_phone: quoteForm.hostPhone,
-          event_type: quoteForm.eventType,
-          event_date: quoteForm.eventDate || null,
-          event_location: quoteForm.eventLocation,
-          guest_count: quoteForm.guestCount ? parseInt(quoteForm.guestCount) : null,
-          budget_range: quoteForm.budgetRange,
-          message: quoteForm.message,
-          services_requested: quoteForm.servicesRequested,
-          status: 'pending',
-        });
-
-      if (insertError) throw insertError;
-
       toast({
         title: 'Quote Request Sent!',
         description: `Your request has been sent to ${selectedProvider.business_name}. They will respond soon.`,

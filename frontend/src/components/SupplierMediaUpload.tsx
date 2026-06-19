@@ -6,6 +6,7 @@ import {
 import { supabase } from '@/lib/supabase';
 import { useAppContext } from '@/contexts/AppContext';
 import { mediaTypes, mediaCategories } from '@/data/venueTypes';
+import { appendPortfolioUrls, removePortfolioUrl, setCoverImage as saveCoverImage } from '@/lib/portfolioUpload';
 
 interface UploadedMedia {
   id: string;
@@ -106,27 +107,21 @@ const SupplierMediaUpload: React.FC<SupplierMediaUploadProps> = ({ supplierId, o
           .from('supplier-media')
           .getPublicUrl(fileName);
 
-        // Save to database
-        const { data: mediaData, error: dbError } = await supabase
-          .from('supplier_media')
-          .insert({
-            supplier_id: supplierId,
-            user_id: user.id,
-            media_type: selectedType,
-            category: selectedCategory,
-            title: file.name.replace(/\.[^/.]+$/, ''),
-            file_url: publicUrl,
-            file_name: file.name,
-            file_size: file.size,
-            mime_type: file.type,
-            sort_order: uploadedMedia.length + i,
-          })
-          .select()
-          .single();
+        await appendPortfolioUrls(user.id, [publicUrl]);
 
-        if (dbError) throw dbError;
-
-        setUploadedMedia(prev => [...prev, mediaData as UploadedMedia]);
+        const newMedia: UploadedMedia = {
+          id: publicUrl,
+          media_type: selectedType,
+          category: selectedCategory,
+          title: file.name.replace(/\.[^/.]+$/, ''),
+          description: '',
+          file_url: publicUrl,
+          file_name: file.name,
+          is_featured: false,
+          is_cover: false,
+          sort_order: uploadedMedia.length + i,
+        };
+        setUploadedMedia(prev => [...prev, newMedia]);
       } catch (err) {
         console.error('Upload error:', err);
         setError(`Failed to upload ${file.name}`);
@@ -137,61 +132,31 @@ const SupplierMediaUpload: React.FC<SupplierMediaUploadProps> = ({ supplierId, o
     setUploadProgress(100);
   };
 
-  const toggleFeatured = async (mediaId: string) => {
-    const media = uploadedMedia.find(m => m.id === mediaId);
-    if (!media) return;
-
-    const { error } = await supabase
-      .from('supplier_media')
-      .update({ is_featured: !media.is_featured })
-      .eq('id', mediaId);
-
-    if (!error) {
-      setUploadedMedia(prev => 
-        prev.map(m => m.id === mediaId ? { ...m, is_featured: !m.is_featured } : m)
-      );
-    }
+  const toggleFeatured = (mediaId: string) => {
+    setUploadedMedia(prev =>
+      prev.map(m => m.id === mediaId ? { ...m, is_featured: !m.is_featured } : m)
+    );
   };
 
   const setCoverImage = async (mediaId: string) => {
-    // First, unset all cover images
-    await supabase
-      .from('supplier_media')
-      .update({ is_cover: false })
-      .eq('supplier_id', supplierId);
-
-    // Set the new cover
-    const { error } = await supabase
-      .from('supplier_media')
-      .update({ is_cover: true })
-      .eq('id', mediaId);
-
+    if (!user) return;
+    const media = uploadedMedia.find(m => m.id === mediaId);
+    if (!media) return;
+    const newCoverUrl = media.is_cover ? null : media.file_url;
+    const { error } = await saveCoverImage(user.id, newCoverUrl);
     if (!error) {
-      setUploadedMedia(prev => 
-        prev.map(m => ({ ...m, is_cover: m.id === mediaId }))
+      setUploadedMedia(prev =>
+        prev.map(m => ({ ...m, is_cover: m.id === mediaId ? !m.is_cover : false }))
       );
     }
   };
 
   const deleteMedia = async (mediaId: string) => {
+    if (!user) return;
     const media = uploadedMedia.find(m => m.id === mediaId);
     if (!media) return;
-
-    // Delete from storage
-    const filePath = media.file_url.split('/supplier-media/')[1];
-    if (filePath) {
-      await supabase.storage.from('supplier-media').remove([filePath]);
-    }
-
-    // Delete from database
-    const { error } = await supabase
-      .from('supplier_media')
-      .delete()
-      .eq('id', mediaId);
-
-    if (!error) {
-      setUploadedMedia(prev => prev.filter(m => m.id !== mediaId));
-    }
+    await removePortfolioUrl(user.id, media.file_url);
+    setUploadedMedia(prev => prev.filter(m => m.id !== mediaId));
   };
 
   return (
