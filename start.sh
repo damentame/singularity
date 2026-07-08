@@ -112,8 +112,8 @@ if [ -f "$FRONTEND_ENV" ]; then
     check_var "$FRONTEND_ENV" "VITE_SUPABASE_ANON_KEY" "anon key from your Supabase / Databasepad dashboard → Settings → API"
 else
     fail "frontend/.env  not found"
-    hint "Create it from the repo-root example:"
-    hint "  cp .env.example frontend/.env"
+    hint "Create it from the example:"
+    hint "  cp frontend/.env.example frontend/.env"
     hint "Then open frontend/.env and set:"
     hint "  VITE_SUPABASE_URL=https://qdgjitmgoruiyajojjcr.databasepad.com"
     hint "  VITE_SUPABASE_ANON_KEY=<your anon key>"

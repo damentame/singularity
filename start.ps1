@@ -122,8 +122,8 @@ if (Test-Path $FrontendEnv) {
     $null = Test-EnvVar $feVars "VITE_SUPABASE_ANON_KEY"  "anon key from your Supabase / Databasepad dashboard -> Settings -> API"
 } else {
     Write-Fail "frontend\.env  not found"
-    Write-Hint "Create it from the repo-root example:"
-    Write-Hint "  Copy-Item .env.example frontend\.env"
+    Write-Hint "Create it from the example:"
+    Write-Hint "  Copy-Item frontend\.env.example frontend\.env"
     Write-Hint "Then open frontend\.env and set:"
     Write-Hint "  VITE_SUPABASE_URL=https://qdgjitmgoruiyajojjcr.databasepad.com"
     Write-Hint "  VITE_SUPABASE_ANON_KEY=<your anon key>"
