@@ -76,8 +76,63 @@ if ($currentBranch -eq "develop") {
     Write-Hint "Continuing on '$currentBranch' anyway..."
 }
 
-# ── 3. Environment variables ──────────────────────────────────────────────────
-Write-Hdr "3. Environment variables"
+# ── 3. Local Supabase ─────────────────────────────────────────────────────────
+Write-Hdr "3. Local Supabase"
+
+$SbApiUrl = $null
+$SbAnonKey = $null
+$SbServiceRoleKey = $null
+
+if (-not (Get-Command npx -ErrorAction SilentlyContinue)) {
+    Write-Fail "npx (Node.js) is not installed"
+    Write-Hint "Install Node.js: https://nodejs.org/  (npx ships with it)"
+    Write-Host "`nCannot continue - the Supabase CLI runs via npx." -ForegroundColor Red
+    exit 1
+}
+Write-Ok "npx found"
+
+$null = & npx --yes supabase status 2>&1
+if ($LASTEXITCODE -eq 0) {
+    Write-Ok "Local Supabase is already running"
+} else {
+    Write-Info "Starting local Supabase (Postgres, Auth, REST, Studio)..."
+    Write-Info "(First run downloads containers and may take a few minutes)"
+    Write-Host ""
+    & npx --yes supabase start
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host ""
+        Write-Host "  [!!]  supabase start failed." -ForegroundColor Red
+        Write-Host ""
+        Write-Hint "* Stale containers from a previous run:  npx supabase stop  then re-run this script"
+        Write-Hint "* See the full error:  npx supabase start --debug"
+        exit 1
+    }
+    Write-Ok "Local Supabase is running"
+}
+
+$statusEnv = & npx --yes supabase status -o env 2>$null
+if ($LASTEXITCODE -eq 0) {
+    foreach ($line in $statusEnv) {
+        if ($line -match '^([A-Z_]+)="?(.*?)"?$') {
+            switch ($Matches[1]) {
+                "API_URL"          { $SbApiUrl = $Matches[2] }
+                "ANON_KEY"         { $SbAnonKey = $Matches[2] }
+                "SERVICE_ROLE_KEY" { $SbServiceRoleKey = $Matches[2] }
+            }
+        }
+    }
+}
+
+if ($SbApiUrl -and $SbAnonKey -and $SbServiceRoleKey) {
+    Write-Ok "Fetched local Supabase credentials"
+} else {
+    Write-Warn "Could not read API_URL / ANON_KEY / SERVICE_ROLE_KEY from 'supabase status -o env'"
+    Write-Hint "You can still continue - just fill frontend\.env and backend\.env manually"
+    Write-Hint "using the values from:  npx supabase status"
+}
+
+# ── 4. Environment variables ──────────────────────────────────────────────────
+Write-Hdr "4. Environment variables"
 
 # Parses a .env file into a hashtable. Ignores comments and blank lines.
 function Read-DotEnv ($Path) {
@@ -115,6 +170,12 @@ function Test-EnvVar ($vars, $name, $hint) {
 # ── frontend\.env ─────────────────────────────────────────────────────────────
 $FrontendEnv = "frontend\.env"
 
+if (-not (Test-Path $FrontendEnv) -and $SbApiUrl) {
+    Write-Info "Creating frontend\.env from local Supabase credentials..."
+    Set-Content -Path $FrontendEnv -Value "VITE_SUPABASE_URL=$SbApiUrl"
+    Add-Content -Path $FrontendEnv -Value "VITE_SUPABASE_ANON_KEY=$SbAnonKey"
+}
+
 if (Test-Path $FrontendEnv) {
     Write-Ok "frontend\.env exists"
     $feVars = Read-DotEnv $FrontendEnv
@@ -136,6 +197,15 @@ if (Test-Path $FrontendEnv) {
 # ── backend\.env ──────────────────────────────────────────────────────────────
 $BackendEnv = "backend\.env"
 
+if (-not (Test-Path $BackendEnv) -and $SbApiUrl) {
+    Write-Info "Creating backend\.env from local Supabase credentials..."
+    Set-Content -Path $BackendEnv -Value "APP_NAME=singularity-backend"
+    Add-Content -Path $BackendEnv -Value "DEBUG=false"
+    Add-Content -Path $BackendEnv -Value "SUPABASE_URL=$SbApiUrl"
+    Add-Content -Path $BackendEnv -Value "SUPABASE_ANON_KEY=$SbAnonKey"
+    Add-Content -Path $BackendEnv -Value "SUPABASE_SERVICE_ROLE_KEY=$SbServiceRoleKey"
+}
+
 if (Test-Path $BackendEnv) {
     Write-Ok "backend\.env exists"
     $beVars = Read-DotEnv $BackendEnv
@@ -154,8 +224,8 @@ if (Test-Path $BackendEnv) {
     $script:ErrorCount += 3
 }
 
-# ── 4. Port availability ──────────────────────────────────────────────────────
-Write-Hdr "4. Port availability"
+# ── 5. Port availability ──────────────────────────────────────────────────────
+Write-Hdr "5. Port availability"
 
 function Test-PortFree ($Port, $Service) {
     $occupied = $false
@@ -180,8 +250,8 @@ function Test-PortFree ($Port, $Service) {
 Test-PortFree 8080 "frontend"
 Test-PortFree 8000 "backend API"
 
-# ── 5. Launch ─────────────────────────────────────────────────────────────────
-Write-Hdr "5. Starting"
+# ── 6. Launch ─────────────────────────────────────────────────────────────────
+Write-Hdr "6. Starting"
 
 if ($script:ErrorCount -gt 0) {
     Write-Host ""

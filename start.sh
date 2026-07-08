@@ -75,8 +75,58 @@ else
     hint "Continuing on '${CURRENT_BRANCH}' anyway…"
 fi
 
-# ── 3. Environment files ──────────────────────────────────────────────────────
-header "3. Environment variables"
+# ── 3. Local Supabase ─────────────────────────────────────────────────────────
+header "3. Local Supabase"
+
+SB_API_URL=""
+SB_ANON_KEY=""
+SB_SERVICE_ROLE_KEY=""
+
+if ! command -v npx &>/dev/null; then
+    fail "npx (Node.js) is not installed"
+    hint "Install Node.js: https://nodejs.org/  (npx ships with it)"
+    printf "\n${RED}${BOLD}Cannot continue — the Supabase CLI runs via npx.${RESET}\n\n"
+    exit 1
+fi
+ok "npx found"
+
+if npx --yes supabase status &>/dev/null; then
+    ok "Local Supabase is already running"
+else
+    info "Starting local Supabase (Postgres, Auth, REST, Studio)…"
+    info "(First run downloads containers and may take a few minutes)"
+    printf "\n"
+    if ! npx --yes supabase start; then
+        printf "\n${RED}${BOLD}  ✗  supabase start failed.${RESET}\n\n"
+        hint "• Stale containers from a previous run:  npx supabase stop  then re-run this script"
+        hint "• See the full error:  npx supabase start --debug"
+        exit 1
+    fi
+    ok "Local Supabase is running"
+fi
+
+SUPABASE_STATUS_ENV="$(mktemp)"
+if npx --yes supabase status -o env >"$SUPABASE_STATUS_ENV" 2>/dev/null; then
+    set -a
+    # shellcheck disable=SC1090
+    source "$SUPABASE_STATUS_ENV"
+    set +a
+    SB_API_URL="${API_URL:-}"
+    SB_ANON_KEY="${ANON_KEY:-}"
+    SB_SERVICE_ROLE_KEY="${SERVICE_ROLE_KEY:-}"
+fi
+rm -f "$SUPABASE_STATUS_ENV"
+
+if [ -n "$SB_API_URL" ] && [ -n "$SB_ANON_KEY" ] && [ -n "$SB_SERVICE_ROLE_KEY" ]; then
+    ok "Fetched local Supabase credentials"
+else
+    warn "Could not read API_URL / ANON_KEY / SERVICE_ROLE_KEY from 'supabase status -o env'"
+    hint "You can still continue — just fill frontend/.env and backend/.env manually"
+    hint "using the values from:  npx supabase status"
+fi
+
+# ── 4. Environment files ──────────────────────────────────────────────────────
+header "4. Environment variables"
 
 # Checks that a variable is present in a file and not a placeholder value.
 # Usage: check_var <file> <VAR_NAME> <human-readable hint>
@@ -106,6 +156,14 @@ check_var() {
 # ── frontend/.env ─────────────────────────────────────────────────────────────
 FRONTEND_ENV="frontend/.env"
 
+if [ ! -f "$FRONTEND_ENV" ] && [ -n "$SB_API_URL" ]; then
+    info "Creating frontend/.env from local Supabase credentials…"
+    {
+        echo "VITE_SUPABASE_URL=$SB_API_URL"
+        echo "VITE_SUPABASE_ANON_KEY=$SB_ANON_KEY"
+    } >"$FRONTEND_ENV"
+fi
+
 if [ -f "$FRONTEND_ENV" ]; then
     ok "frontend/.env exists"
     check_var "$FRONTEND_ENV" "VITE_SUPABASE_URL"      "your local Supabase API URL — run: npx supabase start"
@@ -126,6 +184,17 @@ fi
 # ── backend/.env ──────────────────────────────────────────────────────────────
 BACKEND_ENV="backend/.env"
 
+if [ ! -f "$BACKEND_ENV" ] && [ -n "$SB_API_URL" ]; then
+    info "Creating backend/.env from local Supabase credentials…"
+    {
+        echo "APP_NAME=singularity-backend"
+        echo "DEBUG=false"
+        echo "SUPABASE_URL=$SB_API_URL"
+        echo "SUPABASE_ANON_KEY=$SB_ANON_KEY"
+        echo "SUPABASE_SERVICE_ROLE_KEY=$SB_SERVICE_ROLE_KEY"
+    } >"$BACKEND_ENV"
+fi
+
 if [ -f "$BACKEND_ENV" ]; then
     ok "backend/.env exists"
     check_var "$BACKEND_ENV" "SUPABASE_URL"             "your local Supabase API URL — run: npx supabase start"
@@ -143,8 +212,8 @@ else
     ERRORS=$((ERRORS + 3))
 fi
 
-# ── 4. Port availability ──────────────────────────────────────────────────────
-header "4. Port availability"
+# ── 5. Port availability ──────────────────────────────────────────────────────
+header "5. Port availability"
 
 check_port() {
     local port="$1" service="$2"
@@ -170,8 +239,8 @@ check_port() {
 check_port 8080 "frontend"
 check_port 8000 "backend API"
 
-# ── 5. Launch ─────────────────────────────────────────────────────────────────
-header "5. Starting"
+# ── 6. Launch ─────────────────────────────────────────────────────────────────
+header "6. Starting"
 
 if [ "$ERRORS" -gt 0 ]; then
     printf "\n${RED}${BOLD}  ✗  Found %d issue(s) above — fix them then re-run this script.${RESET}\n\n" "$ERRORS"
