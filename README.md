@@ -1,5 +1,8 @@
 # Singularity
 
+> New to this repo? See [GETTING_STARTED.md](./GETTING_STARTED.md) for a
+> step-by-step setup guide (no prior technical experience required).
+
 ## Branching strategy
 
 We use a **linear promotion** flow. Feature and task branches are created from `develop`, then merged back into `develop`. `develop` is merged into `main` when we cut a release.
