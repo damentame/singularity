@@ -17,7 +17,7 @@ const TEMPLATE_STORAGE_KEY = 'theone_moodboard_templates_v1';
 
 // ─── PRE-BUILT STARTER TEMPLATES ────────────────────────────────────────────
 
-const uid = () => `tpl-${Date.now()}-${Math.random().toString(36).substr(2, 8)}`;
+const uid = () => `tpl-${crypto.randomUUID()}`;
 const imgId = (prefix: string, n: number) => `${prefix}-img-${n}`;
 
 export const STARTER_TEMPLATES: MoodBoardTemplate[] = [

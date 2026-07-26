@@ -16,6 +16,7 @@ import {
   collectionTimingOptions,
   contingencyPercentages,
 } from '@/data/supplierWorkbookData';
+import { COUNTRY_FINANCE_CONFIGS, getCurrencySymbol } from '@/data/countryConfig';
 
 interface SupplierWorkbookProps {
   eventId: string;
@@ -52,13 +53,9 @@ const SupplierWorkbook: React.FC<SupplierWorkbookProps> = ({
 }) => {
   // Get VAT rate for country
   const vatInfo = vatRatesByCountry[country] || { rate: 0, name: 'Tax' };
-  const currency = country === 'South Africa' ? 'ZAR' : 
-                   country === 'United Kingdom' ? 'GBP' :
-                   ['France', 'Italy', 'Germany', 'Spain', 'Portugal', 'Netherlands', 'Belgium', 'Austria', 'Ireland', 'Greece'].includes(country) ? 'EUR' :
-                   country === 'United States' ? 'USD' :
-                   country === 'Australia' ? 'AUD' :
-                   country === 'United Arab Emirates' ? 'AED' : 'USD';
-  const currencySymbol = currencySymbols[currency] || '$';
+  const countryConfig = COUNTRY_FINANCE_CONFIGS.find(c => c.countryName === country);
+  const currency = countryConfig?.currencyIso || 'USD';
+  const currencySymbol = countryConfig?.currencySymbol || getCurrencySymbol(currency) || '$';
 
   // Get default contingency percentage based on guest count
   const defaultContingency = contingencyPercentages.find(

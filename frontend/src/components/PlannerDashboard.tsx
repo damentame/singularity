@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { Calendar, Users, MapPin, Trash2, Copy, FileText, Layers, ChevronLeft, ChevronRight, User, Cloud, CloudOff, RefreshCw, CheckCircle, Download, Loader2, Database, Clock, UserCircle } from 'lucide-react';
+import { Calendar, Users, MapPin, Trash2, Copy, FileText, Layers, ChevronLeft, ChevronRight, User, Cloud, CloudOff, RefreshCw, CheckCircle, Download, Loader2, Database, Clock, UserCircle, Sparkles } from 'lucide-react';
 import { useEventContext, EVENT_TYPE_LABELS, CreateEventParams, getEventDisplayName, PlannerEvent } from '@/contexts/EventContext';
 
 import { getCountryByCode } from '@/data/countries';
@@ -9,6 +9,7 @@ import CoordinatorHeader from './CoordinatorHeader';
 import { toast } from '@/components/ui/use-toast';
 import { useAutoSaveStatus } from './EventAutoSaver';
 import ClientDirectory from './ClientDirectory';
+import { seedDemoData, clearDemoData } from '@/lib/demoSeed';
 
 
 
@@ -69,6 +70,24 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ onOpenEvent }) => {
       toast({ title: 'Event Deleted', description: `"${eventName}" has been removed.` });
     }
   };
+
+  const handleLoadDemo = () => {
+    const added = seedDemoData();
+    if (added === 0) {
+      toast({ title: 'Demo Already Loaded', description: 'Demo events are already in your workspace.' });
+    } else {
+      // Force a page reload so EventContext re-reads localStorage
+      window.location.reload();
+    }
+  };
+
+  const handleClearDemo = () => {
+    if (!confirm('Remove all demo events? Your real events will not be affected.')) return;
+    clearDemoData();
+    window.location.reload();
+  };
+
+  const hasDemoEvents = events.some(e => e.id.startsWith('demo-event-'));
 
   const handleSaveAll = async () => {
     await triggerSaveNow();
@@ -208,6 +227,29 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ onOpenEvent }) => {
                   </>
                 )}
               </div>
+            )}
+
+            {/* Demo data button (hide on clients view) */}
+            {viewMode !== 'clients' && !hasDemoEvents && (
+              <button
+                onClick={handleLoadDemo}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-all border"
+                style={{ borderColor: 'rgba(201,162,74,0.25)', color: GOLD, backgroundColor: 'rgba(201,162,74,0.04)' }}
+                title="Load demo events"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                Demo
+              </button>
+            )}
+            {viewMode !== 'clients' && hasDemoEvents && (
+              <button
+                onClick={handleClearDemo}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-all border"
+                style={{ borderColor: 'rgba(239,68,68,0.2)', color: '#EF4444', backgroundColor: 'rgba(239,68,68,0.04)' }}
+                title="Remove demo events"
+              >
+                Clear Demo
+              </button>
             )}
 
             {/* Save All button (hide on clients view) */}
@@ -533,9 +575,15 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ onOpenEvent }) => {
               <div className="text-center py-20">
                 <FileText className="w-12 h-12 mx-auto mb-4" style={{ color: '#DDD' }} />
                 <p className="text-gray-400 mb-4">No events yet</p>
-                <button onClick={() => setShowCreate(true)} className="px-6 py-2.5 rounded-lg text-xs font-medium uppercase tracking-wider" style={{ backgroundColor: GOLD, color: '#FFF' }}>
-                  Create Your First Event
-                </button>
+                <div className="flex items-center justify-center gap-3 flex-wrap">
+                  <button onClick={() => setShowCreate(true)} className="px-6 py-2.5 rounded-lg text-xs font-medium uppercase tracking-wider" style={{ backgroundColor: GOLD, color: '#FFF' }}>
+                    Create Your First Event
+                  </button>
+                  <button onClick={handleLoadDemo} className="flex items-center gap-1.5 px-5 py-2.5 rounded-lg text-xs font-medium uppercase tracking-wider border transition-all hover:shadow-sm" style={{ borderColor: 'rgba(201,162,74,0.3)', color: GOLD, backgroundColor: 'rgba(201,162,74,0.04)' }}>
+                    <Sparkles className="w-3.5 h-3.5" />
+                    Load Demo Data
+                  </button>
+                </div>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">

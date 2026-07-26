@@ -65,7 +65,7 @@ const saveAlerts = (alerts: PriceAlert[]) => {
   localStorage.setItem(ALERT_STORAGE_KEY, JSON.stringify(alerts));
 };
 
-const uid = () => `pa-${Date.now()}-${Math.random().toString(36).substr(2, 8)}`;
+const uid = () => `pa-${crypto.randomUUID()}`;
 
 // ─── Read Operations ─────────────────────────────────────────────────────────
 

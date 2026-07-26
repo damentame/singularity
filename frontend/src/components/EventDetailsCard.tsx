@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Calendar, MapPin, Users, Building2, ChevronDown, ChevronUp, Globe, Phone } from 'lucide-react';
+import { Calendar, MapPin, Users, Building2, ChevronDown, ChevronUp, Globe, Phone, ShieldAlert } from 'lucide-react';
 
 import {
   useEventContext,
@@ -505,11 +505,38 @@ const EventDetailsCard: React.FC<EventDetailsCardProps> = ({ event }) => {
         </div>
       </div>
 
-      {/* Note: Venue Spaces, Backup Venues, and Programs are now managed within Sub-Events & Costing */}
-      <div className="mt-5 px-4 py-3 rounded-xl" style={{ backgroundColor: 'rgba(201,162,74,0.03)', border: '1px dashed rgba(201,162,74,0.15)' }}>
-        <p className="text-[10px] text-gray-400 italic">
-          Venue spaces, backup venues, and costing are managed per sub-event in the <span className="font-semibold" style={{ color: GOLD }}>Sub-Events & Costing</span> tab below.
-        </p>
+      {/* ─── Backup & Contingency Plans ─────────────────────────────── */}
+      <div className="mt-5 rounded-xl border p-4 space-y-3" style={{ borderColor: 'rgba(201,162,74,0.12)', backgroundColor: 'rgba(201,162,74,0.02)' }}>
+        <div className="flex items-center gap-2 mb-1">
+          <ShieldAlert className="w-3.5 h-3.5" style={{ color: GOLD }} />
+          <h4 className="text-[10px] font-semibold uppercase tracking-[0.12em]" style={{ color: GOLD }}>Backup & Contingency Plans</h4>
+        </div>
+
+        {/* Backup Venue */}
+        <div>
+          <label className="text-[10px] uppercase tracking-wider text-gray-400 block mb-1">Backup Venue</label>
+          <input
+            type="text"
+            value={event.backupVenue || ''}
+            onChange={(e) => updateEvent(event.id, { backupVenue: e.target.value })}
+            placeholder="e.g. Indoor alternative if outdoor venue is unavailable"
+            className="w-full px-3 py-2 rounded-lg border text-xs outline-none"
+            style={{ borderColor: '#EFEFEF', color: '#1A1A1A', backgroundColor: '#FFF' }}
+          />
+        </div>
+
+        {/* Contingency Notes */}
+        <div>
+          <label className="text-[10px] uppercase tracking-wider text-gray-400 block mb-1">Contingency Plan Notes</label>
+          <textarea
+            value={event.contingencyNotes || ''}
+            onChange={(e) => updateEvent(event.id, { contingencyNotes: e.target.value })}
+            placeholder="Wet weather plan, power failure protocol, supplier cancellation fallback, etc."
+            rows={3}
+            className="w-full px-3 py-2 rounded-lg border text-xs outline-none resize-none"
+            style={{ borderColor: '#EFEFEF', color: '#1A1A1A', backgroundColor: '#FFF' }}
+          />
+        </div>
       </div>
 
     </div>

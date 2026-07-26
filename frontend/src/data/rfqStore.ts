@@ -31,7 +31,7 @@ const saveStore = (store: RFQStore) => {
   localStorage.setItem(RFQ_STORAGE_KEY, JSON.stringify(store));
 };
 
-const uid = () => `${Date.now()}-${Math.random().toString(36).substr(2, 8)}`;
+const uid = () => crypto.randomUUID();
 const now = () => new Date().toISOString();
 
 // ─── Read Operations ─────────────────────────────────────────────────────────
@@ -218,6 +218,33 @@ export const saveQuoteVersion = (
 };
 
 
+
+// ─── Upsert Quote Version from Supabase ─────────────────────────────────────
+// Called by the coordinator-side Supabase pull to write a submitted quote
+// (from the supplier's device) into the local rfqStore without duplicating.
+export const upsertQuoteVersionFromSupabase = (qv: SupplierQuoteVersion): boolean => {
+  const store = loadStore();
+  if (store.quoteVersions.find(v => v.id === qv.id)) return false; // already present
+
+  store.quoteVersions.push(qv);
+
+  if (qv.type === 'SUBMITTED') {
+    store.batches = store.batches.map(b => {
+      if (b.id !== qv.rfqBatchId) return b;
+      const newStatus: RFQBatchStatus = qv.versionNumber > 1 ? 'REVISED' : 'QUOTED';
+      return {
+        ...b,
+        currentSubmittedVersion: Math.max(b.currentSubmittedVersion, qv.versionNumber),
+        // Only upgrade status if still in DRAFT/SENT — don't downgrade ACCEPTED/LOCKED
+        status: (['DRAFT', 'SENT'] as RFQBatchStatus[]).includes(b.status) ? newStatus : b.status,
+        lastSupplierSaveAt: qv.submittedAt || b.lastSupplierSaveAt,
+      };
+    });
+  }
+
+  saveStore(store);
+  return true; // new version was inserted
+};
 
 // ─── Accept Quote Version ────────────────────────────────────────────────────
 

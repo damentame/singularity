@@ -1,4 +1,15 @@
-node_modules
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+dist-ssr/
+build/
+
+# Environment variables — never commit these
+.env
+.env.local
+.env.*.local
 
 # Python
 __pycache__/
@@ -6,10 +17,28 @@ __pycache__/
 *$py.class
 .venv/
 venv/
-.env
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
 *.egg-info/
-dist/
-build/
+
+# Supabase local dev (generated files, not secrets)
+supabase/.branches/
+supabase/.temp/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Editor
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# OS
+.DS_Store
+Thumbs.db

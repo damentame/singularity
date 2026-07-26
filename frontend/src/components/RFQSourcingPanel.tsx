@@ -15,6 +15,8 @@ import {
 } from '@/data/rfqStore';
 import { getCurrencySymbol, formatCurrency } from '@/data/countryConfig';
 import { toast } from '@/components/ui/use-toast';
+import { useAppContext } from '@/contexts/AppContext';
+import { syncRFQBatch, syncBatchStatus } from '@/lib/rfqSupabaseSync';
 
 const GOLD = '#C9A24A';
 
@@ -24,6 +26,7 @@ interface RFQSourcingPanelProps {
 
 const RFQSourcingPanel: React.FC<RFQSourcingPanelProps> = ({ event }) => {
   const { updateEvent } = useEventContext();
+  const { user } = useAppContext();
   const [showCreate, setShowCreate] = useState(false);
   const [supplierName, setSupplierName] = useState('');
   const [supplierEmail, setSupplierEmail] = useState('');
@@ -50,6 +53,11 @@ const RFQSourcingPanel: React.FC<RFQSourcingPanelProps> = ({ event }) => {
     setShowCreate(false);
     setRefreshKey(k => k + 1);
 
+    // Sync to Supabase so supplier can open the portal on any device
+    if (user?.id) {
+      syncRFQBatch(user.id, batch, getItemsForBatch(batch.id), event);
+    }
+
     // Log activity
     const logEntry = {
       id: `log-${Date.now()}`, eventId: event.id, action: 'RFQ_BATCH_CREATED',
@@ -62,6 +70,7 @@ const RFQSourcingPanel: React.FC<RFQSourcingPanelProps> = ({ event }) => {
 
   const handleSend = (batchId: string) => {
     updateBatchStatus(batchId, 'SENT');
+    if (user?.id) syncBatchStatus(batchId, 'SENT', user.id);
     setRefreshKey(k => k + 1);
     setShowEmailModal(batchId);
     toast({ title: 'RFQ Marked as Sent' });
@@ -299,7 +308,7 @@ const RFQSourcingPanel: React.FC<RFQSourcingPanelProps> = ({ event }) => {
         const batch = batches.find(b => b.id === showEmailModal);
         if (!batch) return null;
         const portalUrl = getPortalUrl(batch.portalToken);
-        const emailBody = `Dear ${batch.supplierName},\n\nWe would like to request a quotation for an upcoming event.\n\nEvent: ${getEventDisplayName(event)}\nDate: ${event.date || 'TBC'}\nLocation: ${event.city || ''}, ${event.country || ''}\nItems: ${getItemsForBatch(batch.id).length} items\n\nPlease use the secure portal link below to view items and submit your quote:\n${portalUrl}\n\nThis link is long-lived - you can return at any time to update your prices.\n\n${batch.messageToSupplier ? `Note: ${batch.messageToSupplier}\n\n` : ''}Thank you.`;
+        const emailBody = `Dear ${batch.supplierName},\n\nWe would like to request a tax invoice for an upcoming event.\n\nEvent: ${getEventDisplayName(event)}\nDate: ${event.date || 'TBC'}\nLocation: ${event.city || ''}, ${event.country || ''}\nItems: ${getItemsForBatch(batch.id).length} items\n\nPlease use the secure portal link below to view items and submit your tax invoice:\n${portalUrl}\n\nThis link is long-lived — you can return at any time to update your prices.\n\n${batch.messageToSupplier ? `Note: ${batch.messageToSupplier}\n\n` : ''}Thank you.`;
 
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setShowEmailModal(null)}>

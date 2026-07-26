@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   BarChart3, Filter, ChevronDown, ChevronRight, CheckCircle2, XCircle,
   TrendingDown, Award, Package, Layers, Tag, Users, ArrowUpDown,
@@ -22,6 +22,7 @@ import {
   acceptQuoteVersion,
   applySupplierPricingToEvent,
 } from '@/data/rfqStore';
+import { pullQuotesFromSupabase } from '@/lib/rfqSupabaseSync';
 
 import { getCurrencySymbol, formatCurrency } from '@/data/countryConfig';
 import { toast } from '@/components/ui/use-toast';
@@ -86,6 +87,23 @@ const SupplierQuoteComparison: React.FC<SupplierQuoteComparisonProps> = ({ event
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
   const [acceptedSelections, setAcceptedSelections] = useState<Record<string, string>>({});
   const [showFilters, setShowFilters] = useState(true);
+  const [showMargins, setShowMargins] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+
+  // Pull any quotes the supplier submitted cross-device from Supabase on open.
+  useEffect(() => {
+    let cancelled = false;
+    const pull = async () => {
+      setSyncing(true);
+      const newCount = await pullQuotesFromSupabase(event.id);
+      if (!cancelled) {
+        setSyncing(false);
+        if (newCount > 0) setRefreshKey(k => k + 1);
+      }
+    };
+    pull();
+    return () => { cancelled = true; };
+  }, [event.id]);
 
   const currSym = getCurrencySymbol(event.billingCurrency || event.currency || 'ZAR');
   const fmt = (n: number) => formatCurrency(n, currSym);
@@ -319,12 +337,31 @@ const SupplierQuoteComparison: React.FC<SupplierQuoteComparisonProps> = ({ event
     };
   }, [comparisons, suppliers]);
 
+  // ─── Coordinator margin summary ────────────────────────────────────────────
+
+  const marginSummary = useMemo(() => {
+    let totalSupplierCost = 0;
+    let totalClientPrice = 0;
+
+    event.lineItems.forEach(item => {
+      const supplierTotal = item.quantity * item.unitCost;
+      const clientTotal = supplierTotal * (1 + item.markupPercent / 100);
+      totalSupplierCost += supplierTotal;
+      totalClientPrice += clientTotal;
+    });
+
+    const totalMargin = totalClientPrice - totalSupplierCost;
+    const marginPercent = totalClientPrice > 0 ? (totalMargin / totalClientPrice) * 100 : 0;
+
+    return { totalSupplierCost, totalClientPrice, totalMargin, marginPercent };
+  }, [event.lineItems]);
+
   // ─── Actions ───────────────────────────────────────────────────────────────
 
   const handleAcceptQuote = (lineItemId: string, batchId: string) => {
     const latestSubmitted = getLatestSubmitted(batchId);
     if (!latestSubmitted) {
-      toast({ title: 'No Quote Found', description: 'This supplier has not submitted a quote yet.' });
+      toast({ title: 'No Tax Invoice Found', description: 'This supplier has not submitted a tax invoice yet.' });
       return;
     }
 
@@ -354,7 +391,7 @@ const SupplierQuoteComparison: React.FC<SupplierQuoteComparisonProps> = ({ event
 
     const batch = getBatchesForEvent(event.id).find(b => b.id === batchId);
     toast({
-      title: 'Quote Accepted',
+      title: 'Tax Invoice Accepted',
       description: `${batch?.supplierName}'s pricing applied to the line item.`,
     });
   };
@@ -423,10 +460,10 @@ const SupplierQuoteComparison: React.FC<SupplierQuoteComparisonProps> = ({ event
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `quote-comparison-${event.jobCode}.csv`;
+    a.download = `tax-invoice-comparison-${event.jobCode}.csv`;
     a.click();
     URL.revokeObjectURL(url);
-    toast({ title: 'CSV Exported', description: 'Quote comparison data downloaded.' });
+    toast({ title: 'CSV Exported', description: 'Tax invoice comparison data downloaded.' });
   };
 
   // ─── Empty state ───────────────────────────────────────────────────────────
@@ -436,16 +473,16 @@ const SupplierQuoteComparison: React.FC<SupplierQuoteComparisonProps> = ({ event
       <div className="space-y-5">
         <div className="flex items-center justify-between">
           <h2 className="text-[10px] font-semibold uppercase tracking-[0.15em]" style={{ color: GOLD }}>
-            <BarChart3 className="w-3.5 h-3.5 inline mr-1.5" />Quote Comparison
+            <BarChart3 className="w-3.5 h-3.5 inline mr-1.5" />Tax Invoice Comparison
           </h2>
         </div>
         <div className="text-center py-16">
           <BarChart3 className="w-12 h-12 mx-auto mb-4" style={{ color: 'rgba(201,162,74,0.2)' }} />
           <h3 className="text-lg font-light mb-2" style={{ fontFamily: '"Playfair Display", Georgia, serif', color: '#1A1A1A' }}>
-            No Quotes to Compare Yet
+            No Tax Invoices to Compare Yet
           </h3>
           <p className="text-xs text-gray-400 max-w-md mx-auto mb-6">
-            Send RFQ batches to suppliers and wait for their quotes to come in. Once multiple suppliers have quoted on the same items, you'll see a side-by-side comparison here.
+            Send requests to suppliers and wait for their tax invoices to come in. Once multiple suppliers have submitted tax invoices for the same items, you'll see a side-by-side comparison here.
           </p>
           <div className="flex items-center justify-center gap-6 text-[10px] text-gray-400">
             <div className="flex items-center gap-1.5">
@@ -481,15 +518,33 @@ const SupplierQuoteComparison: React.FC<SupplierQuoteComparisonProps> = ({ event
       {/* Header */}
       <div className="flex items-center justify-between">
         <h2 className="text-[10px] font-semibold uppercase tracking-[0.15em]" style={{ color: GOLD }}>
-          <BarChart3 className="w-3.5 h-3.5 inline mr-1.5" />Quote Comparison Dashboard
+          <BarChart3 className="w-3.5 h-3.5 inline mr-1.5" />Tax Invoice Comparison
         </h2>
         <div className="flex items-center gap-2">
           <button
-            onClick={() => setRefreshKey(k => k + 1)}
-            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-medium transition-colors hover:bg-black/5"
+            onClick={() => setShowMargins(m => !m)}
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-medium border transition-all"
+            style={showMargins
+              ? { borderColor: 'rgba(201,162,74,0.4)', color: GOLD, backgroundColor: 'rgba(201,162,74,0.06)' }
+              : { borderColor: 'rgba(0,0,0,0.08)', color: '#666' }
+            }
+          >
+            <Percent className="w-3 h-3" /> Coordinator Fees
+          </button>
+          <button
+            onClick={async () => {
+              setSyncing(true);
+              const n = await pullQuotesFromSupabase(event.id);
+              setSyncing(false);
+              setRefreshKey(k => k + 1);
+              if (n > 0) toast({ title: `${n} new tax invoice${n > 1 ? 's' : ''} synced from portal` });
+            }}
+            disabled={syncing}
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-medium transition-colors hover:bg-black/5 disabled:opacity-50"
             style={{ color: '#999' }}
           >
-            <RefreshCw className="w-3 h-3" /> Refresh
+            <RefreshCw className={`w-3 h-3 ${syncing ? 'animate-spin' : ''}`} />
+            {syncing ? 'Syncing…' : 'Sync & Refresh'}
           </button>
           <button
             onClick={handleExportCSV}
@@ -500,6 +555,69 @@ const SupplierQuoteComparison: React.FC<SupplierQuoteComparisonProps> = ({ event
           </button>
         </div>
       </div>
+
+      {/* ─── Coordinator Fees Panel ──────────────────────────────────────────── */}
+      {showMargins && (
+        <div className="rounded-xl border p-5 space-y-4" style={{ borderColor: 'rgba(201,162,74,0.2)', backgroundColor: 'rgba(201,162,74,0.02)' }}>
+          <div className="flex items-center gap-2">
+            <Percent className="w-4 h-4" style={{ color: GOLD }} />
+            <span className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: GOLD }}>Coordinator Fee Overview</span>
+            <span className="text-[9px] px-2 py-0.5 rounded-full text-white" style={{ backgroundColor: '#C9A24A' }}>Private</span>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="bg-white rounded-xl p-3.5 border" style={{ borderColor: 'rgba(201,162,74,0.1)' }}>
+              <span className="text-[9px] uppercase tracking-wider text-gray-400 block mb-1">Supplier Cost</span>
+              <p className="text-base font-semibold" style={{ color: '#1A1A1A' }}>{fmtShort(marginSummary.totalSupplierCost)}</p>
+              <p className="text-[9px] text-gray-400 mt-0.5">Total across all items</p>
+            </div>
+            <div className="bg-white rounded-xl p-3.5 border" style={{ borderColor: 'rgba(201,162,74,0.1)' }}>
+              <span className="text-[9px] uppercase tracking-wider text-gray-400 block mb-1">Client Price</span>
+              <p className="text-base font-semibold" style={{ color: '#1A1A1A' }}>{fmtShort(marginSummary.totalClientPrice)}</p>
+              <p className="text-[9px] text-gray-400 mt-0.5">Incl. your markup</p>
+            </div>
+            <div className="bg-white rounded-xl p-3.5 border" style={{ borderColor: 'rgba(34,197,94,0.15)' }}>
+              <span className="text-[9px] uppercase tracking-wider text-gray-400 block mb-1">Your Fee</span>
+              <p className="text-base font-semibold text-green-600">{fmtShort(marginSummary.totalMargin)}</p>
+              <p className="text-[9px] text-gray-400 mt-0.5">Gross margin</p>
+            </div>
+            <div className="bg-white rounded-xl p-3.5 border" style={{ borderColor: 'rgba(34,197,94,0.15)' }}>
+              <span className="text-[9px] uppercase tracking-wider text-gray-400 block mb-1">Margin %</span>
+              <p className="text-base font-semibold text-green-600">{marginSummary.marginPercent.toFixed(1)}%</p>
+              <p className="text-[9px] text-gray-400 mt-0.5">Of client price</p>
+            </div>
+          </div>
+          {/* Per-item markup breakdown */}
+          <div className="overflow-x-auto">
+            <table className="w-full text-[10px]">
+              <thead>
+                <tr className="text-gray-400 uppercase tracking-wider border-b" style={{ borderColor: 'rgba(201,162,74,0.1)' }}>
+                  <th className="text-left pb-2 font-medium">Item</th>
+                  <th className="text-right pb-2 font-medium">Supplier Cost</th>
+                  <th className="text-right pb-2 font-medium">Markup</th>
+                  <th className="text-right pb-2 font-medium">Client Price</th>
+                  <th className="text-right pb-2 font-medium">Your Fee</th>
+                </tr>
+              </thead>
+              <tbody>
+                {event.lineItems.map(item => {
+                  const supplierTotal = item.quantity * item.unitCost;
+                  const clientTotal = supplierTotal * (1 + item.markupPercent / 100);
+                  const fee = clientTotal - supplierTotal;
+                  return (
+                    <tr key={item.id} className="border-b" style={{ borderColor: 'rgba(0,0,0,0.04)' }}>
+                      <td className="py-2 pr-3 text-gray-700 font-medium max-w-[180px] truncate">{item.name}</td>
+                      <td className="py-2 text-right text-gray-500">{fmtShort(supplierTotal)}</td>
+                      <td className="py-2 text-right text-gray-500">{item.markupPercent}%</td>
+                      <td className="py-2 text-right font-medium" style={{ color: '#1A1A1A' }}>{fmtShort(clientTotal)}</td>
+                      <td className="py-2 text-right font-semibold text-green-600">{fmtShort(fee)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* ─── Savings Summary Cards ─────────────────────────────────────────── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
