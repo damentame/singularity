@@ -4,6 +4,7 @@ import {
   Clock, ImageIcon, Link2, Upload, X, FileText, MapPin, Package,
   Copy, Users, Truck, CheckCircle2, Loader2, MoreHorizontal,
 } from 'lucide-react';
+import CategoryIcon from './CategoryIcons';
 import {
   useEventContext,
   PlannerEvent,
@@ -186,6 +187,7 @@ const CostingTable: React.FC<CostingTableProps> = ({ event, onHireSupplier }) =>
                     ? <ChevronRight className="w-3.5 h-3.5" style={{ color: GOLD }} />
                     : <ChevronDown className="w-3.5 h-3.5" style={{ color: GOLD }} />
                   }
+                  <CategoryIcon category={cat} size={14} color={GOLD} />
                   <span className="text-[11px] font-semibold uppercase tracking-[0.12em]" style={{ color: '#555' }}>
                     {CATEGORY_LABELS[cat]}
                   </span>

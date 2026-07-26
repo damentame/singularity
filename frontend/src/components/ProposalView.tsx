@@ -3,6 +3,7 @@ import {
   ArrowLeft, Printer, Shield, Layers, MapPin, AlertTriangle, Palette, Users,
   Clock, Building2, ArrowRight,
 } from 'lucide-react';
+import CategoryIcon from './CategoryIcons';
 import {
   PlannerEvent,
   CATEGORY_LABELS,
@@ -217,9 +218,12 @@ const MomentCostSection: React.FC<MomentCostSectionProps> = ({
         return (
           <div key={cat} className="mb-4 ml-3">
             <div className="flex items-center justify-between mb-1.5 pb-1 border-b" style={{ borderColor: 'rgba(201,162,74,0.08)' }}>
-              <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: '#888' }}>
-                {CATEGORY_LABELS[cat]}
-              </span>
+              <div className="flex items-center gap-1.5">
+                <CategoryIcon category={cat} size={12} color={GOLD} />
+                <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: '#888' }}>
+                  {CATEGORY_LABELS[cat]}
+                </span>
+              </div>
               <span className="text-[10px] font-medium" style={{ color: '#999' }}>{fmt(catTotal)}</span>
             </div>
 

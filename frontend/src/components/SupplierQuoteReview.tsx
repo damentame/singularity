@@ -4,6 +4,7 @@ import {
   Shield, FileText, Loader2, CheckCircle2, AlertCircle, Mail,
   Eye, EyeOff, Edit3, Globe, CalendarDays, Hash,
 } from 'lucide-react';
+import CategoryIcon from './CategoryIcons';
 import {
   useEventContext,
   PlannerEvent,
@@ -383,7 +384,8 @@ const SupplierQuoteReview: React.FC<SupplierQuoteReviewProps> = ({ event, onClos
                                   <div className="flex-1 min-w-0">
                                     <div className="flex items-center gap-2">
                                       <span className="text-xs font-medium" style={{ color: '#1A1A1A' }}>{item.name}</span>
-                                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">
+                                      <span className="inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">
+                                        <CategoryIcon category={item.category as ItemCategory} size={10} color={GOLD} />
                                         {CATEGORY_LABELS[item.category as ItemCategory] || item.category}
                                       </span>
                                     </div>
