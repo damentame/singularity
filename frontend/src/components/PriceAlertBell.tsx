@@ -3,6 +3,7 @@ import {
   Bell, BellRing, Check, CheckCheck, X, TrendingDown, ArrowDown,
   Trash2, Eye, ExternalLink, ChevronRight, Sparkles, DollarSign,
 } from 'lucide-react';
+import { getCurrencySymbol } from '@/data/countryConfig';
 import {
   getAllAlerts,
   getUnreadCount,
@@ -117,7 +118,7 @@ const PriceAlertBell: React.FC<PriceAlertBellProps> = ({ onNavigateToCompare }) 
   const filteredAlerts = filter === 'unread' ? alerts.filter(a => !a.isRead) : alerts;
 
   const formatPrice = (amount: number, currency: string) => {
-    const sym = currency === 'ZAR' ? 'R' : currency === 'USD' ? '$' : currency === 'EUR' ? '\u20AC' : currency === 'GBP' ? '\u00A3' : currency;
+    const sym = getCurrencySymbol(currency);
     return `${sym}${amount.toLocaleString('en-ZA', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
   };
 

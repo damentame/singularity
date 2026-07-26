@@ -15,6 +15,8 @@ import {
 } from '@/data/rfqStore';
 import { getCurrencySymbol, formatCurrency } from '@/data/countryConfig';
 import { toast } from '@/components/ui/use-toast';
+import { useAppContext } from '@/contexts/AppContext';
+import { syncRFQBatch, syncBatchStatus } from '@/lib/rfqSupabaseSync';
 
 const GOLD = '#C9A24A';
 
@@ -24,6 +26,7 @@ interface RFQSourcingPanelProps {
 
 const RFQSourcingPanel: React.FC<RFQSourcingPanelProps> = ({ event }) => {
   const { updateEvent } = useEventContext();
+  const { user } = useAppContext();
   const [showCreate, setShowCreate] = useState(false);
   const [supplierName, setSupplierName] = useState('');
   const [supplierEmail, setSupplierEmail] = useState('');
@@ -50,6 +53,11 @@ const RFQSourcingPanel: React.FC<RFQSourcingPanelProps> = ({ event }) => {
     setShowCreate(false);
     setRefreshKey(k => k + 1);
 
+    // Sync to Supabase so supplier can open the portal on any device
+    if (user?.id) {
+      syncRFQBatch(user.id, batch, getItemsForBatch(batch.id), event);
+    }
+
     // Log activity
     const logEntry = {
       id: `log-${Date.now()}`, eventId: event.id, action: 'RFQ_BATCH_CREATED',
@@ -62,6 +70,7 @@ const RFQSourcingPanel: React.FC<RFQSourcingPanelProps> = ({ event }) => {
 
   const handleSend = (batchId: string) => {
     updateBatchStatus(batchId, 'SENT');
+    if (user?.id) syncBatchStatus(batchId, 'SENT', user.id);
     setRefreshKey(k => k + 1);
     setShowEmailModal(batchId);
     toast({ title: 'RFQ Marked as Sent' });

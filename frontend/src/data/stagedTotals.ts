@@ -16,7 +16,12 @@ export interface StagedTotals {
 
   // Stage 3: Collection / Strike / After-hours
   collectionTotal: number;
-  subtotal3: number; // Before VAT
+  subtotal3: number; // Before contingency & VAT
+
+  // Stage 3b: Contingency (optional %)
+  contingencyPercent: number;
+  contingencyAmount: number;
+  subtotal3b: number; // After contingency, before VAT
 
   // Stage 4: VAT
   vatName: string;
@@ -88,10 +93,14 @@ export function calculateStagedTotals(
     }
   });
 
+  const contingencyPercent = event.contingencyPercent ?? 0;
+
   const subtotal2 = subtotal1 + deliverySetupTotal;
   const subtotal3 = subtotal2 + collectionTotal;
-  const vatAmount = subtotal3 * vatRate;
-  const subtotal4 = subtotal3 + vatAmount;
+  const contingencyAmount = subtotal3 * (contingencyPercent / 100);
+  const subtotal3b = subtotal3 + contingencyAmount;
+  const vatAmount = subtotal3b * vatRate;
+  const subtotal4 = subtotal3b + vatAmount;
   const refundableDeposit = dryHireBase * 0.10;
   const grandTotal = subtotal4 + refundableDeposit;
 
@@ -104,6 +113,9 @@ export function calculateStagedTotals(
     subtotal2,
     collectionTotal,
     subtotal3,
+    contingencyPercent,
+    contingencyAmount,
+    subtotal3b,
     vatName,
     vatRate,
     vatAmount,

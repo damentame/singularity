@@ -14,11 +14,13 @@ import {
   EVENT_TYPE_LABELS,
   getEventDisplayName,
 } from '@/contexts/EventContext';
-import { createRFQBatch, updateBatchStatus, getPortalUrl } from '@/data/rfqStore';
+import { createRFQBatch, updateBatchStatus, getPortalUrl, getItemsForBatch } from '@/data/rfqStore';
 import { getCurrencySymbol } from '@/data/countryConfig';
 import { getCountryByCode } from '@/data/countries';
 import { supabase } from '@/lib/supabase';
 import { toast } from '@/components/ui/use-toast';
+import { useAppContext } from '@/contexts/AppContext';
+import { syncRFQBatch, syncBatchStatus } from '@/lib/rfqSupabaseSync';
 
 const GOLD = '#C9A24A';
 
@@ -44,6 +46,7 @@ interface SupplierQuoteReviewProps {
 
 const SupplierQuoteReview: React.FC<SupplierQuoteReviewProps> = ({ event, onClose }) => {
   const { updateEvent, calculateLineItem } = useEventContext();
+  const { user } = useAppContext();
   const [expandedSuppliers, setExpandedSuppliers] = useState<Record<string, boolean>>({});
   const [sending, setSending] = useState<string | null>(null);
   const [sendingAll, setSendingAll] = useState(false);
@@ -146,6 +149,12 @@ const SupplierQuoteReview: React.FC<SupplierQuoteReviewProps> = ({ event, onClos
         supplierMessages[bundle.supplierKey] || ''
       );
       updateBatchStatus(batch.id, 'SENT');
+
+      // Sync to Supabase so supplier can open portal on any device
+      if (user?.id) {
+        syncRFQBatch(user.id, batch, getItemsForBatch(batch.id), event);
+        syncBatchStatus(batch.id, 'SENT', user.id);
+      }
 
       // Send bundled email via edge function
       try {

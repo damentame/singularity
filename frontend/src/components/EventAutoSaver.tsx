@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useCallback, createContext, useContext, useState } from 'react';
 import { useEventContext, PlannerEvent } from '@/contexts/EventContext';
 import { useEventPersistence, SyncState } from '@/hooks/useEventPersistence';
+import { useAppContext } from '@/contexts/AppContext';
+import { supabase } from '@/lib/supabase';
 
 // ─── Auto-Save Status Context ────────────────────────────────────────────────
 
@@ -15,10 +17,11 @@ interface AutoSaveStatus {
   loadSavedEvents: () => Promise<void>;
   loadEventData: (eventId: string) => Promise<PlannerEvent | null>;
   deleteEventFromDB: (eventId: string) => Promise<boolean>;
-  // New sync status fields
+  // Sync status fields
   syncState: SyncState;
   pendingSaveCount: number;
   isOnline: boolean;
+  isLoadingRemote: boolean;
   forceSync: () => Promise<{ flushed: number; failed: number; remaining: number }>;
   getQueueInfo: () => { count: number; items: any[]; hasErrors: boolean; oldestQueuedAt: string | null };
   clearQueue: () => void;
@@ -35,10 +38,10 @@ const AutoSaveContext = createContext<AutoSaveStatus>({
   loadSavedEvents: async () => {},
   loadEventData: async () => null,
   deleteEventFromDB: async () => false,
-  // Defaults for new fields
   syncState: 'synced',
   pendingSaveCount: 0,
   isOnline: true,
+  isLoadingRemote: false,
   forceSync: async () => ({ flushed: 0, failed: 0, remaining: 0 }),
   getQueueInfo: () => ({ count: 0, items: [], hasErrors: false, oldestQueuedAt: null }),
   clearQueue: () => {},
@@ -52,7 +55,8 @@ const AUTO_SAVE_INTERVAL = 30000; // 30 seconds
 const DEBOUNCE_DELAY = 5000; // 5 seconds after last change
 
 export const EventAutoSaveProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { events, calculateSummary } = useEventContext();
+  const { events, calculateSummary, mergeEventsFromSupabase } = useEventContext();
+  const { user } = useAppContext();
   const {
     savedEvents,
     isLoading: isLoadingSaved,
@@ -79,12 +83,58 @@ export const EventAutoSaveProvider: React.FC<{ children: React.ReactNode }> = ({
   const calcRef = useRef(calculateSummary);
   const lastSavedHashRef = useRef<string>('');
   const [localLastSave, setLocalLastSave] = useState<string | null>(null);
+  const [isLoadingRemote, setIsLoadingRemote] = useState(false);
+  const prevEventIdsRef = useRef<Set<string>>(new Set(events.map(e => e.id)));
 
   // Keep refs current
   useEffect(() => {
     eventsRef.current = events;
     calcRef.current = calculateSummary;
   }, [events, calculateSummary]);
+
+  // ─── Boot-time load from Supabase ────────────────────────────────────────────
+  // Runs once when the user authenticates. Fetches all coordinator events from
+  // Supabase and merges them with whatever is in localStorage (newer updatedAt wins).
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const loadFromSupabase = async () => {
+      setIsLoadingRemote(true);
+      try {
+        const { data, error } = await supabase
+          .from('planner_events')
+          .select('event_data')
+          .order('updated_at', { ascending: false });
+
+        if (!error && data && data.length > 0) {
+          const remoteEvents = data
+            .map((row: any) => row.event_data as PlannerEvent)
+            .filter(Boolean);
+          mergeEventsFromSupabase(remoteEvents);
+          prevEventIdsRef.current = new Set(remoteEvents.map(e => e.id));
+        }
+      } catch (e) {
+        console.warn('Failed to load events from Supabase:', e);
+      } finally {
+        setIsLoadingRemote(false);
+      }
+    };
+
+    loadFromSupabase();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
+
+  // ─── Delete sync ─────────────────────────────────────────────────────────────
+  // When an event disappears from the events array, delete it from Supabase too.
+  useEffect(() => {
+    if (!user?.id) return;
+    const currentIds = new Set(events.map(e => e.id));
+    const deletedIds = [...prevEventIdsRef.current].filter(id => !currentIds.has(id));
+    if (deletedIds.length > 0) {
+      deletedIds.forEach(id => deleteFromDB(id));
+    }
+    prevEventIdsRef.current = currentIds;
+  }, [events, user?.id]);
 
   // Generate a simple hash of events to detect changes
   const getEventsHash = useCallback((evts: PlannerEvent[]) => {
@@ -198,10 +248,10 @@ export const EventAutoSaveProvider: React.FC<{ children: React.ReactNode }> = ({
         loadSavedEvents,
         loadEventData,
         deleteEventFromDB,
-        // New sync fields
         syncState,
         pendingSaveCount,
         isOnline,
+        isLoadingRemote,
         forceSync,
         getQueueInfo: getQueueInfoHook,
         clearQueue: clearQueueHook,
