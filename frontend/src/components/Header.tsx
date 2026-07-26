@@ -77,13 +77,8 @@ const Header: React.FC = () => {
   return (
     <header
       className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${
-        isScrolled || currentView !== 'home'
-          ? 'shadow-2xl'
-          : 'bg-transparent'
+        isScrolled || currentView !== 'home' ? 'header-glass' : 'bg-transparent'
       }`}
-      style={{
-        backgroundColor: isScrolled || currentView !== 'home' ? '#0B1426' : 'transparent'
-      }}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-22">
@@ -234,7 +229,7 @@ const Header: React.FC = () => {
               /* Single Sign In button - the only auth trigger in the header */
               <button
                 onClick={handleSignIn}
-                className="px-6 py-2.5 bg-gradient-to-r from-gold-light via-gold to-gold-dark font-medium text-xs uppercase tracking-[0.15em] rounded-lg hover:shadow-lg hover:shadow-gold/20 transition-all duration-300"
+                className="btn-press px-6 py-2.5 bg-gradient-to-r from-gold-light via-gold to-gold-dark font-medium text-xs uppercase tracking-[0.15em] rounded-lg hover:shadow-lg hover:shadow-gold/20 transition-all duration-300"
                 style={{ color: '#0B1426' }}
               >
                 Sign In

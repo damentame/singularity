@@ -1,5 +1,6 @@
 import React from 'react';
 import { Search, Heart, MessageSquare, Calendar } from 'lucide-react';
+import ScrollReveal from './ScrollReveal';
 
 const HowItWorks: React.FC = () => {
   const steps = [
@@ -29,16 +30,16 @@ const HowItWorks: React.FC = () => {
     <section className="py-32 relative" style={{ backgroundColor: '#0B1426' }}>
       <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
-        <div className="text-center mb-24">
-          <span 
+        <ScrollReveal className="text-center mb-24">
+          <span
             className="text-xs uppercase tracking-[0.2em] text-gold"
             style={{ fontFamily: '"Inter", sans-serif' }}
           >
             Simple Process
           </span>
-          <h2 
+          <h2
             className="text-4xl md:text-5xl font-light mt-6 mb-8 tracking-[0.06em]"
-            style={{ 
+            style={{
               color: '#FFFFFF',
               fontFamily: '"Playfair Display", Georgia, serif',
             }}
@@ -78,12 +79,12 @@ const HowItWorks: React.FC = () => {
               Your Way
             </span>
           </div>
-        </div>
+        </ScrollReveal>
 
         {/* Steps */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-16">
           {steps.map((step, index) => (
-            <div key={index} className="relative text-center group">
+            <ScrollReveal key={index} delay={index * 120} className="relative text-center group">
               {/* Connector Line */}
               {index < steps.length - 1 && (
                 <div className="hidden lg:block absolute top-14 left-1/2 w-full h-px bg-gradient-to-r from-gold/25 to-gold/[0.05]" />
@@ -122,7 +123,7 @@ const HowItWorks: React.FC = () => {
               >
                 {step.description}
               </p>
-            </div>
+            </ScrollReveal>
           ))}
         </div>
       </div>

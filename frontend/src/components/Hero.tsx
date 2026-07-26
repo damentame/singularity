@@ -130,40 +130,43 @@ const Hero: React.FC = () => {
           </div>
 
           {/* The One */}
-          <h1 
-            className="text-5xl md:text-6xl lg:text-7xl font-light tracking-[0.08em] mb-6"
-            style={{ 
-              color: '#FFFFFF', 
+          <h1
+            className="animate-hero-reveal text-5xl md:text-6xl lg:text-7xl font-light tracking-[0.08em] mb-6"
+            style={{
+              color: '#FFFFFF',
               fontFamily: '"Playfair Display", Georgia, serif',
+              animationDelay: '0.25s',
             }}
           >
             The One
           </h1>
 
           {/* Classic Tagline */}
-          <h2 
-            className="text-2xl md:text-3xl lg:text-4xl font-light tracking-[0.06em] mb-6"
-            style={{ 
-              color: '#C9A96E', 
+          <h2
+            className="animate-hero-reveal text-2xl md:text-3xl lg:text-4xl font-light tracking-[0.06em] mb-6"
+            style={{
+              color: '#C9A96E',
               fontFamily: '"Playfair Display", Georgia, serif',
+              animationDelay: '0.55s',
             }}
           >
             Your Event &middot; Your Way
           </h2>
 
           {/* Elegant Descriptor */}
-          <p 
-            className="text-sm md:text-base max-w-xl mx-auto mb-10 uppercase tracking-[0.3em] font-light"
-            style={{ 
+          <p
+            className="animate-hero-reveal text-sm md:text-base max-w-xl mx-auto mb-10 uppercase tracking-[0.3em] font-light"
+            style={{
               color: 'rgba(255,255,255,0.55)',
               fontFamily: '"Inter", sans-serif',
+              animationDelay: '0.8s',
             }}
           >
             Curated Luxury &middot; Global Reach &middot; Flawless Execution
           </p>
 
           {/* Territory Selector */}
-          <div className="mb-8">
+          <div className="animate-hero-reveal mb-8" style={{ animationDelay: '1s' }}>
             <TerritorySelector onSelect={handleTerritorySelect} />
           </div>
         </div>
@@ -204,7 +207,7 @@ const Hero: React.FC = () => {
                 <button
                   key={type.id}
                   onClick={() => handleRoleSelect(type.id)}
-                  className={`group relative overflow-hidden rounded-3xl transition-all duration-500 transform hover:scale-[1.02] ${
+                  className={`btn-press group relative overflow-hidden rounded-3xl transition-all duration-500 transform hover:scale-[1.02] ${
                     selectedRole === type.id || isActiveRole
                       ? 'ring-4 ring-gold shadow-2xl shadow-gold/20 scale-[1.02]' 
                       : 'hover:shadow-xl hover:shadow-gold/10'

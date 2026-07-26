@@ -296,10 +296,12 @@ const CostingTable: React.FC<CostingTableProps> = ({ event, onHireSupplier }) =>
 
                           {/* Quantity */}
                           <div className="col-span-1 flex justify-center">
-                            <div className="flex items-center gap-0.5">
-                              <button onClick={() => updateLineItem(event.id, item.id, { quantity: Math.max(0, item.quantity - 1) })}
-                                className="w-6 h-6 rounded-md flex items-center justify-center text-[10px] transition-colors"
-                                style={{ backgroundColor: 'rgba(0,0,0,0.04)', color: '#888' }}>-</button>
+                            <div className="inline-flex items-center rounded-lg overflow-hidden border flex-shrink-0" style={{ borderColor: 'rgba(201,162,74,0.2)' }}>
+                              <button
+                                onClick={() => updateLineItem(event.id, item.id, { quantity: Math.max(0, item.quantity - 1) })}
+                                className="flex-shrink-0 w-7 h-7 flex items-center justify-center text-base font-light transition-colors hover:bg-gray-50 border-r"
+                                style={{ color: '#888', borderColor: 'rgba(201,162,74,0.15)' }}
+                              >−</button>
                               <input
                                 type="text" inputMode="numeric"
                                 value={item.quantity}
@@ -307,12 +309,14 @@ const CostingTable: React.FC<CostingTableProps> = ({ event, onHireSupplier }) =>
                                   const v = parseInt(e.target.value);
                                   if (!isNaN(v) && v >= 0) updateLineItem(event.id, item.id, { quantity: v });
                                 }}
-                                className="w-10 h-6 text-center text-[11px] font-medium rounded-md border outline-none"
-                                style={{ borderColor: 'rgba(201,162,74,0.15)', color: '#1A1A1A' }}
+                                className="w-8 h-7 text-center text-[11px] font-medium outline-none"
+                                style={{ color: '#1A1A1A' }}
                               />
-                              <button onClick={() => updateLineItem(event.id, item.id, { quantity: item.quantity + 1 })}
-                                className="w-6 h-6 rounded-md flex items-center justify-center text-[10px] transition-colors"
-                                style={{ backgroundColor: 'rgba(201,162,74,0.08)', color: GOLD }}>+</button>
+                              <button
+                                onClick={() => updateLineItem(event.id, item.id, { quantity: item.quantity + 1 })}
+                                className="flex-shrink-0 w-7 h-7 flex items-center justify-center text-base font-light transition-colors hover:bg-amber-50 border-l"
+                                style={{ color: GOLD, borderColor: 'rgba(201,162,74,0.15)' }}
+                              >+</button>
                             </div>
                           </div>
 

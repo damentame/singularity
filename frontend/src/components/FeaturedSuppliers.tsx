@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useAppContext } from '@/contexts/AppContext';
+import ScrollReveal from './ScrollReveal';
 import { suppliers } from '@/data/suppliers';
 import { supplierCategories, accommodationTypes, venueSubcategories } from '@/data/venueTypes';
 import SupplierCard from './SupplierCard';
@@ -81,7 +82,7 @@ const FeaturedSuppliers: React.FC = () => {
     <section className="py-28" style={{ backgroundColor: '#0B1426' }}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
-        <div className="text-center mb-12">
+        <ScrollReveal className="text-center mb-12">
           <span 
             className="text-xs uppercase tracking-[0.2em] text-gold"
             style={{ fontFamily: '"Inter", sans-serif' }}
@@ -108,7 +109,7 @@ const FeaturedSuppliers: React.FC = () => {
             Discover our handpicked collection of the world's finest event suppliers, 
             each vetted for excellence and exceptional service.
           </p>
-        </div>
+        </ScrollReveal>
 
         {/* Accommodation Types Horizontal Scroll (Airbnb Style) */}
         <div className="mb-10">

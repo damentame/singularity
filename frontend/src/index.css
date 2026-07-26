@@ -406,6 +406,65 @@ html {
   header, footer, .print-hide { display: none !important; }
 }
 
+/* ─── Scroll Reveal ─────────────────────────────────────────────────────── */
+.reveal,
+.reveal-left,
+.reveal-right,
+.reveal-fade {
+  transition:
+    opacity 0.85s cubic-bezier(0.23, 1, 0.32, 1),
+    transform 0.85s cubic-bezier(0.23, 1, 0.32, 1),
+    filter 0.85s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.reveal       { opacity: 0; transform: translateY(28px); }
+.reveal-left  { opacity: 0; transform: translateX(-28px); }
+.reveal-right { opacity: 0; transform: translateX(28px); }
+.reveal-fade  { opacity: 0; }
+
+.reveal.is-visible,
+.reveal-left.is-visible,
+.reveal-right.is-visible,
+.reveal-fade.is-visible {
+  opacity: 1;
+  transform: translate(0, 0);
+}
+
+/* ─── Hero Text Stagger ─────────────────────────────────────────────────── */
+@keyframes heroReveal {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+    filter: blur(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0px);
+  }
+}
+
+.animate-hero-reveal {
+  animation: heroReveal 1.1s cubic-bezier(0.23, 1, 0.32, 1) both;
+}
+
+/* ─── Glassmorphic Header ───────────────────────────────────────────────── */
+.header-glass {
+  background: rgba(11, 20, 38, 0.82);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border-bottom: 1px solid rgba(139, 105, 20, 0.18);
+  box-shadow: 0 1px 40px rgba(0, 0, 0, 0.28);
+}
+
+/* ─── Button Press Micro-interaction ────────────────────────────────────── */
+.btn-press {
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+.btn-press:active {
+  transform: scale(0.97) !important;
+}
+
 /* Coordinator custom scrollbar override for cream bg */
 .custom-scrollbar-light::-webkit-scrollbar {
   width: 4px;
