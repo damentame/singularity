@@ -1,5 +1,5 @@
 -- ─── Extensions ──────────────────────────────────────────────────────────────
-create extension if not exists "uuid-ossp";
+
 
 -- ─── Utility: auto-update updated_at ─────────────────────────────────────────
 create or replace function public.set_updated_at()
@@ -76,7 +76,7 @@ create trigger on_auth_user_created
 -- Used by the manage-events edge function (useEventPersistence hook).
 -- ─────────────────────────────────────────────────────────────────────────────
 create table public.planner_events (
-  id                  uuid primary key default uuid_generate_v4(),
+  id                  uuid primary key default gen_random_uuid(),
   event_id            text not null,                    -- app-generated "evt-..." id
   user_id             uuid not null references auth.users(id) on delete cascade,
   event_data          jsonb not null default '{}',      -- full PlannerEvent object
@@ -123,7 +123,7 @@ create policy "Users can manage own planner events"
 -- Coordinator-owned client accounts. Used by clientDbStore.ts.
 -- ─────────────────────────────────────────────────────────────────────────────
 create table public.clients (
-  id                        uuid primary key default uuid_generate_v4(),
+  id                        uuid primary key default gen_random_uuid(),
   coordinator_id            uuid not null references auth.users(id) on delete cascade,
   client_type               text not null default 'wedding' check (client_type in ('wedding', 'celebration', 'corporate')),
   primary_contact_name      text not null default '',
@@ -167,7 +167,7 @@ create policy "Coordinators can manage own clients"
 -- Event history per client. Used by clientDbStore.ts.
 -- ─────────────────────────────────────────────────────────────────────────────
 create table public.client_events (
-  id                  uuid primary key default uuid_generate_v4(),
+  id                  uuid primary key default gen_random_uuid(),
   client_id           uuid not null references public.clients(id) on delete cascade,
   coordinator_id      uuid not null references auth.users(id) on delete cascade,
   event_local_id      text not null default '',         -- matches PlannerEvent.id
@@ -207,7 +207,7 @@ create policy "Coordinators can manage own client events"
 -- service provider registration wizard.
 -- ─────────────────────────────────────────────────────────────────────────────
 create table public.service_providers (
-  id                      uuid primary key default uuid_generate_v4(),
+  id                      uuid primary key default gen_random_uuid(),
   user_id                 uuid not null unique references auth.users(id) on delete cascade,
   business_name           text not null default '',
   trading_name            text not null default '',
@@ -266,7 +266,7 @@ create policy "Providers can manage own profile"
 -- Simpler event table used by the host wizard flow (useDataSync.ts).
 -- ─────────────────────────────────────────────────────────────────────────────
 create table public.events (
-  id                      uuid primary key default uuid_generate_v4(),
+  id                      uuid primary key default gen_random_uuid(),
   user_id                 uuid not null references auth.users(id) on delete cascade,
   event_id                text not null unique,
   event_name              text not null,
@@ -307,7 +307,7 @@ create policy "Users can manage own events"
 -- Day-by-day breakdown of an event. Used by useDataSync.ts.
 -- ─────────────────────────────────────────────────────────────────────────────
 create table public.sub_events (
-  id                 uuid primary key default uuid_generate_v4(),
+  id                 uuid primary key default gen_random_uuid(),
   event_id           uuid not null references public.events(id) on delete cascade,
   day_number         integer not null,
   event_area_type    text not null,
@@ -347,7 +347,7 @@ create policy "Users can manage sub events via parent"
 -- Guest list per event. Used by useDataSync.ts.
 -- ─────────────────────────────────────────────────────────────────────────────
 create table public.guests (
-  id                  uuid primary key default uuid_generate_v4(),
+  id                  uuid primary key default gen_random_uuid(),
   event_id            uuid not null references public.events(id) on delete cascade,
   full_name           text not null,
   email               text,
@@ -392,7 +392,7 @@ create policy "Users can manage guests via parent event"
 -- Which suppliers a host has selected per event. Used by useDataSync.ts.
 -- ─────────────────────────────────────────────────────────────────────────────
 create table public.service_provider_selections (
-  id              uuid primary key default uuid_generate_v4(),
+  id              uuid primary key default gen_random_uuid(),
   event_id        uuid not null references public.events(id) on delete cascade,
   category        text not null,
   supplier_id     text,
@@ -430,7 +430,7 @@ create policy "Users can manage selections via parent event"
 -- Detailed cost workbooks per event/supplier. Used by useDataSync.ts.
 -- ─────────────────────────────────────────────────────────────────────────────
 create table public.supplier_workbooks (
-  id                      uuid primary key default uuid_generate_v4(),
+  id                      uuid primary key default gen_random_uuid(),
   event_id                uuid references public.events(id) on delete cascade,
   supplier_id             text,
   supplier_name           text,
