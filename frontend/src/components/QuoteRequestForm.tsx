@@ -543,7 +543,7 @@ const QuoteRequestForm: React.FC<QuoteRequestFormProps> = ({
                 type="tel"
                 value={formData.hostPhone}
                 onChange={(e) => handleInputChange('hostPhone', e.target.value)}
-                placeholder="+1 (555) 000-0000"
+                placeholder="+27 82 000 0000"
                 className="pl-10 bg-white/5 border-white/10 text-white placeholder:text-white/40 focus:border-[#B8956A]/50"
               />
             </div>

@@ -843,9 +843,13 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({ open, onClose, onCr
                 <input
                   type="date"
                   value={date}
-                  onChange={(e) => setDate(e.target.value)}
+                  onChange={(e) => {
+                    const newStart = e.target.value;
+                    setDate(newStart);
+                    if (endDate && endDate < newStart) setEndDate(newStart);
+                  }}
                   className={inputStyle}
-                  style={{ borderColor: '#E5E5E5', color: '#1A1A1A' }}
+                  style={{ borderColor: '#E5E5E5', color: '#1A1A1A', minHeight: '44px', fontSize: '15px' }}
                   onFocus={inputFocus}
                   onBlur={inputBlur}
                 />
@@ -855,10 +859,11 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({ open, onClose, onCr
                 <input
                   type="date"
                   value={endDate}
+                  min={date || undefined}
+                  onFocus={(e) => { if (!endDate && date) setEndDate(date); inputFocus(e); }}
                   onChange={(e) => setEndDate(e.target.value)}
                   className={inputStyle}
-                  style={{ borderColor: '#E5E5E5', color: '#1A1A1A' }}
-                  onFocus={inputFocus}
+                  style={{ borderColor: '#E5E5E5', color: '#1A1A1A', minHeight: '44px', fontSize: '15px' }}
                   onBlur={inputBlur}
                 />
               </div>

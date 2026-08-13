@@ -153,6 +153,24 @@ const SupplierPortal: React.FC = () => {
     load();
   }, [token]);
 
+  // Extra items suppliers can propose beyond the original RFQ
+  const [extraItems, setExtraItems] = useState<Array<{ id: string; name: string; description: string; unitPrice: number; quantity: number }>>([]);
+  const [showAddExtra, setShowAddExtra] = useState(false);
+  const [extraForm, setExtraForm] = useState({ name: '', description: '', unitPrice: 0, quantity: 1 });
+
+  const addExtraItem = () => {
+    if (!extraForm.name.trim()) return;
+    setExtraItems(prev => [...prev, { id: crypto.randomUUID(), ...extraForm }]);
+    setExtraForm({ name: '', description: '', unitPrice: 0, quantity: 1 });
+    setShowAddExtra(false);
+    dirtyRef.current = true;
+  };
+
+  const removeExtraItem = (id: string) => {
+    setExtraItems(prev => prev.filter(i => i.id !== id));
+    dirtyRef.current = true;
+  };
+
   // Auto-save every 30 seconds
   useEffect(() => {
     autoSaveRef.current = setInterval(() => {
@@ -628,6 +646,122 @@ const SupplierPortal: React.FC = () => {
             </div>
           )}
         </div>
+
+        {/* ─── Additional Items ────────────────────────────────────────────── */}
+        {!isLocked && (
+          <div className="mt-6 bg-white rounded-xl border p-5" style={{ borderColor: 'rgba(201,162,74,0.12)' }}>
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-[0.12em] block" style={{ color: GOLD }}>
+                  Additional Items You're Offering
+                </label>
+                <p className="text-[10px] text-gray-400 mt-0.5">Propose items not in the original request — the coordinator can review and accept them.</p>
+              </div>
+              <button
+                onClick={() => setShowAddExtra(v => !v)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
+                style={{ backgroundColor: 'rgba(201,162,74,0.1)', color: GOLD }}
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Add Item
+              </button>
+            </div>
+
+            {showAddExtra && (
+              <div className="mb-4 p-4 rounded-xl border bg-amber-50/30" style={{ borderColor: 'rgba(201,162,74,0.2)' }}>
+                <div className="grid grid-cols-2 gap-3 mb-3">
+                  <div className="col-span-2">
+                    <label className="text-[10px] uppercase tracking-wider text-gray-500 block mb-1">Item Name *</label>
+                    <input
+                      type="text"
+                      value={extraForm.name}
+                      onChange={e => setExtraForm(f => ({ ...f, name: e.target.value }))}
+                      placeholder="e.g. Extra lighting rig, Sound engineer"
+                      className="w-full px-3 py-2 text-xs border rounded-lg focus:outline-none"
+                      style={{ borderColor: 'rgba(201,162,74,0.3)' }}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] uppercase tracking-wider text-gray-500 block mb-1">Unit Price</label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={extraForm.unitPrice || ''}
+                      onChange={e => setExtraForm(f => ({ ...f, unitPrice: parseFloat(e.target.value) || 0 }))}
+                      placeholder="0.00"
+                      className="w-full px-3 py-2 text-xs border rounded-lg focus:outline-none"
+                      style={{ borderColor: 'rgba(201,162,74,0.3)' }}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] uppercase tracking-wider text-gray-500 block mb-1">Quantity</label>
+                    <input
+                      type="number"
+                      min={1}
+                      value={extraForm.quantity}
+                      onChange={e => setExtraForm(f => ({ ...f, quantity: parseInt(e.target.value) || 1 }))}
+                      className="w-full px-3 py-2 text-xs border rounded-lg focus:outline-none"
+                      style={{ borderColor: 'rgba(201,162,74,0.3)' }}
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <label className="text-[10px] uppercase tracking-wider text-gray-500 block mb-1">Description</label>
+                    <input
+                      type="text"
+                      value={extraForm.description}
+                      onChange={e => setExtraForm(f => ({ ...f, description: e.target.value }))}
+                      placeholder="Brief description of what's included"
+                      className="w-full px-3 py-2 text-xs border rounded-lg focus:outline-none"
+                      style={{ borderColor: 'rgba(201,162,74,0.3)' }}
+                    />
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 justify-end">
+                  <button onClick={() => setShowAddExtra(false)} className="px-3 py-1.5 text-xs text-gray-500 hover:text-gray-700 transition-colors">Cancel</button>
+                  <button
+                    onClick={addExtraItem}
+                    disabled={!extraForm.name.trim()}
+                    className="px-4 py-1.5 rounded-lg text-xs font-medium disabled:opacity-40 transition-all"
+                    style={{ backgroundColor: GOLD, color: '#FFF' }}
+                  >
+                    Add to Quote
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {extraItems.length > 0 && (
+              <div className="space-y-2">
+                {extraItems.map(item => (
+                  <div key={item.id} className="flex items-center gap-3 px-3 py-2.5 rounded-lg border" style={{ borderColor: 'rgba(201,162,74,0.15)', backgroundColor: 'rgba(201,162,74,0.03)' }}>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium text-gray-800 truncate">{item.name}</p>
+                      {item.description && <p className="text-[10px] text-gray-400 truncate">{item.description}</p>}
+                    </div>
+                    <span className="text-[10px] text-gray-500 flex-shrink-0">qty {item.quantity}</span>
+                    <span className="text-xs font-semibold flex-shrink-0" style={{ color: GOLD }}>
+                      {event ? `${getCurrencySymbol(event.currency || 'ZAR')} ${(item.unitPrice * item.quantity).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : ''}
+                    </span>
+                    <button onClick={() => removeExtraItem(item.id)} className="p-1 hover:text-red-500 text-gray-300 transition-colors flex-shrink-0">
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+                <div className="flex justify-end pt-1">
+                  <span className="text-[10px] text-gray-400">
+                    Additional total: <span className="font-semibold" style={{ color: GOLD }}>
+                      {event ? `${getCurrencySymbol(event.currency || 'ZAR')} ${extraItems.reduce((s, i) => s + i.unitPrice * i.quantity, 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : ''}
+                    </span>
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {extraItems.length === 0 && !showAddExtra && (
+              <p className="text-[10px] text-gray-400 italic">No additional items added yet.</p>
+            )}
+          </div>
+        )}
 
         {/* ─── Supplier Notes ─────────────────────────────────────────────── */}
         <div className="mt-6 bg-white rounded-xl border p-5" style={{ borderColor: 'rgba(201,162,74,0.12)' }}>

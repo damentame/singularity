@@ -109,9 +109,9 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ onOpenEvent }) => {
       const eventData = await loadEventData(eventId);
       if (eventData) {
         const exists = events.find(e => e.id === eventData.id);
+        let finalId = eventData.id;
         if (exists) {
           updateEvent(eventData.id, eventData);
-          toast({ title: 'Event Updated', description: `"${getEventDisplayName(eventData)}" restored from database.` });
         } else {
           const id = createEvent({
             name: eventData.name,
@@ -125,9 +125,9 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ onOpenEvent }) => {
             guestCount: eventData.guestCount,
           });
           updateEvent(id, { ...eventData, id });
-          toast({ title: 'Event Loaded', description: `"${getEventDisplayName(eventData)}" loaded from database.` });
+          finalId = id;
         }
-        setViewMode('grid');
+        onOpenEvent(finalId);
       } else {
         toast({ title: 'Load Failed', description: 'Event data not found in database.', variant: 'destructive' });
       }

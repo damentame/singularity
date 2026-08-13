@@ -18,10 +18,14 @@ import {
 import { supabase } from '@/lib/supabase';
 import { getRFQStatusForLineItem } from '@/data/rfqStore';
 import LineItemSpecEditor from './LineItemSpecEditor';
+import { getCountryConfigOrDefault } from '@/data/countryConfig';
 
 
 const GOLD = '#C9A24A';
-const fmt = (n: number) => 'R ' + n.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const makeFmt = (event: PlannerEvent) => {
+  const cfg = getCountryConfigOrDefault(event.country || 'ZA');
+  return (n: number) => `${cfg.currencySymbol} ${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+};
 
 const RFQ_STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
   DRAFT: { label: 'RFQ Draft', color: '#9CA3AF', bg: 'rgba(156,163,175,0.1)' },
@@ -38,6 +42,7 @@ interface CostingTableProps {
 }
 
 const CostingTable: React.FC<CostingTableProps> = ({ event, onHireSupplier }) => {
+  const fmt = makeFmt(event);
   const { updateLineItem, removeLineItem, addLineItem, calculateLineItem, getSpecsForItem } = useEventContext();
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [showAdvanced, setShowAdvanced] = useState<Record<string, boolean>>({});
@@ -248,7 +253,7 @@ const CostingTable: React.FC<CostingTableProps> = ({ event, onHireSupplier }) =>
                       <div key={item.id}>
                         {/* Main Row */}
                         <div
-                          className="grid grid-cols-12 gap-2 px-4 py-3 items-center border-b transition-all hover:bg-amber-50/20"
+                          className="group grid grid-cols-12 gap-2 px-4 py-3 items-center border-b transition-all hover:bg-amber-50/20"
                           style={{ borderColor: 'rgba(0,0,0,0.03)' }}
                         >
                           {/* Item Name + Badges */}
@@ -345,6 +350,15 @@ const CostingTable: React.FC<CostingTableProps> = ({ event, onHireSupplier }) =>
 
                           {/* Actions */}
                           <div className="col-span-2 flex items-center justify-end gap-1">
+                            {/* Inline Delete */}
+                            <button
+                              onClick={() => removeLineItem(event.id, item.id)}
+                              className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-red-50 transition-all"
+                              title="Delete item"
+                            >
+                              <Trash2 className="w-3.5 h-3.5 text-red-400" />
+                            </button>
+
                             {/* Hire My Supplier - Primary Action */}
                             <button
                               onClick={() => onHireSupplier(item.id)}
