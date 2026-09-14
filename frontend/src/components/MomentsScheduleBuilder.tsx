@@ -652,7 +652,11 @@ const MomentsScheduleBuilder: React.FC<MomentsScheduleBuilderProps> = ({ event, 
           <p className="text-[9px] text-gray-400 mb-3">
             Build your costing line-by-line here. All changes flow automatically into Full Costing and Proposals.
           </p>
-          <CostingTable event={filteredEvent} onHireSupplier={onHireSupplier} />
+          <CostingTable
+            event={filteredEvent}
+            onHireSupplier={onHireSupplier}
+            defaultMomentId={activeMomentId !== '__overall__' ? activeMomentId : undefined}
+          />
         </div>
 
         {/* ─── EMAIL SUPPLIERS BUTTON (MOMENT LEVEL) ─── */}

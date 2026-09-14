@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ArrowLeft, Printer, Shield, Layers, MapPin, AlertTriangle, Palette, Users,
   Clock, Building2, ArrowRight,
@@ -22,7 +22,7 @@ import {
 import { getCountryByCode } from '@/data/countries';
 import { calculateStagedTotals, fmtStaged } from '@/data/stagedTotals';
 import { getCurrencySymbol } from '@/data/countryConfig';
-import { getClientAccountById, getClientDisplayName } from '@/data/clientAccountStore';
+import { DbClient, getClientById, getDbClientDisplayName } from '@/data/clientDbStore';
 
 const GOLD = '#C9A24A';
 
@@ -306,6 +306,14 @@ const MomentCostSection: React.FC<MomentCostSectionProps> = ({
 const ProposalView: React.FC<ProposalViewProps> = ({ event, onBack }) => {
   const { calculateLineItem, getSpecsForItem } = useEventContext();
 
+  const [clientAccount, setClientAccount] = useState<DbClient | null>(null);
+  useEffect(() => {
+    if (!event.clientAccountId) { setClientAccount(null); return; }
+    let cancelled = false;
+    getClientById(event.clientAccountId).then(c => { if (!cancelled) setClientAccount(c); });
+    return () => { cancelled = true; };
+  }, [event.clientAccountId]);
+
   const staged = useMemo(() => calculateStagedTotals(event.lineItems, event, calculateLineItem), [event, calculateLineItem]);
   const currSym = getCurrencySymbol(event.currency || 'ZAR');
   const fmt = (n: number) => fmtStaged(n, currSym);
@@ -395,16 +403,12 @@ const ProposalView: React.FC<ProposalViewProps> = ({ event, onBack }) => {
               {displayName}
             </h2>
 
-            {event.clientAccountId && (() => {
-              const acct = getClientAccountById(event.clientAccountId);
-              if (!acct) return null;
-              return (
-                <p className="text-xs text-gray-400 mb-3">
-                  Client: <span className="font-medium text-gray-600">{getClientDisplayName(acct)}</span>
-                  {acct.primaryContactEmail ? ` · ${acct.primaryContactEmail}` : ''}
-                </p>
-              );
-            })()}
+            {clientAccount && (
+              <p className="text-xs text-gray-400 mb-3">
+                Client: <span className="font-medium text-gray-600">{getDbClientDisplayName(clientAccount)}</span>
+                {clientAccount.primary_contact_email ? ` · ${clientAccount.primary_contact_email}` : ''}
+              </p>
+            )}
 
             <div className="text-sm text-gray-600 mb-1">
               {event.date

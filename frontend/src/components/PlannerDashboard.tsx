@@ -1,9 +1,10 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { Calendar, Users, MapPin, Trash2, Copy, FileText, Layers, ChevronLeft, ChevronRight, User, Cloud, CloudOff, RefreshCw, CheckCircle, Download, Loader2, Database, Clock, UserCircle, Sparkles } from 'lucide-react';
 import { useEventContext, EVENT_TYPE_LABELS, CreateEventParams, getEventDisplayName, PlannerEvent } from '@/contexts/EventContext';
+import { useAppContext } from '@/contexts/AppContext';
 
 import { getCountryByCode } from '@/data/countries';
-import { getClientAccountById, getClientDisplayName } from '@/data/clientAccountStore';
+import { DbClient, fetchClients, getDbClientDisplayName, migrateLocalClientsToDb } from '@/data/clientDbStore';
 import CreateEventModal from './CreateEventModal';
 import CoordinatorHeader from './CoordinatorHeader';
 import { toast } from '@/components/ui/use-toast';
@@ -22,9 +23,28 @@ interface PlannerDashboardProps {
 
 const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ onOpenEvent }) => {
   const { events, createEvent, deleteEvent, duplicateEvent, calculateSummary, updateEvent } = useEventContext();
+  const { user } = useAppContext();
   const [showCreate, setShowCreate] = useState(false);
+  const [preselectedClientId, setPreselectedClientId] = useState<string | undefined>(undefined);
   const [filter, setFilter] = useState<'all' | 'active' | 'draft' | 'completed'>('all');
   const [viewMode, setViewMode] = useState<'grid' | 'calendar' | 'saved' | 'clients'>('grid');
+  const [clientsById, setClientsById] = useState<Record<string, DbClient>>({});
+
+  // Migrate any legacy localStorage clients into the shared Supabase store once,
+  // then load the client map used to label events with their client name.
+  useEffect(() => {
+    if (!user?.id) return;
+    (async () => {
+      await migrateLocalClientsToDb(user.id);
+      const clients = await fetchClients();
+      setClientsById(Object.fromEntries(clients.map(c => [c.id, c])));
+    })();
+  }, [user?.id]);
+
+  const handleNewQuoteForClient = useCallback((clientId: string) => {
+    setPreselectedClientId(clientId);
+    setShowCreate(true);
+  }, []);
 
   const [calendarMonth, setCalendarMonth] = useState(() => new Date());
   const [loadingEventId, setLoadingEventId] = useState<string | null>(null);
@@ -54,6 +74,7 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ onOpenEvent }) => {
   const handleCreate = (params: CreateEventParams) => {
     const id = createEvent(params);
     setShowCreate(false);
+    setPreselectedClientId(undefined);
     toast({ title: 'Event Created', description: `"${params.name}" has been created and will auto-save shortly.` });
     onOpenEvent(id);
   };
@@ -341,7 +362,7 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ onOpenEvent }) => {
 
         {/* ─── CLIENTS DIRECTORY VIEW ─── */}
         {viewMode === 'clients' && (
-          <ClientDirectory />
+          <ClientDirectory onNewQuote={handleNewQuoteForClient} />
         )}
 
 
@@ -619,16 +640,12 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ onOpenEvent }) => {
                         <h3 className="text-lg font-light mb-3 group-hover:opacity-80 transition-opacity" style={{ fontFamily: '"Playfair Display", Georgia, serif', color: '#1A1A1A' }}>
                           {displayName}
                         </h3>
-                        {event.clientAccountId && (() => {
-                          const acct = getClientAccountById(event.clientAccountId);
-                          if (!acct) return null;
-                          return (
-                            <div className="flex items-center gap-1.5 mb-2 text-[10px] text-gray-400">
-                              <User className="w-3 h-3" style={{ color: GOLD }} />
-                              <span>{getClientDisplayName(acct)}</span>
-                            </div>
-                          );
-                        })()}
+                        {event.clientAccountId && clientsById[event.clientAccountId] && (
+                          <div className="flex items-center gap-1.5 mb-2 text-[10px] text-gray-400">
+                            <User className="w-3 h-3" style={{ color: GOLD }} />
+                            <span>{getDbClientDisplayName(clientsById[event.clientAccountId])}</span>
+                          </div>
+                        )}
                         <div className="space-y-2 mb-4">
                           {event.date && (
                             <div className="flex items-center gap-2 text-xs text-gray-500">
@@ -682,7 +699,12 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ onOpenEvent }) => {
         )}
       </div>
 
-      <CreateEventModal open={showCreate} onClose={() => setShowCreate(false)} onCreate={handleCreate} />
+      <CreateEventModal
+        open={showCreate}
+        onClose={() => { setShowCreate(false); setPreselectedClientId(undefined); }}
+        onCreate={handleCreate}
+        preselectedClientId={preselectedClientId}
+      />
     </div>
   );
 };

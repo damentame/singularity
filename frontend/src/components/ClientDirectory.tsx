@@ -31,7 +31,11 @@ interface ClientWithStats extends DbClient {
   totalSpend: number;
 }
 
-const ClientDirectory: React.FC = () => {
+interface ClientDirectoryProps {
+  onNewQuote?: (clientId: string) => void;
+}
+
+const ClientDirectory: React.FC<ClientDirectoryProps> = ({ onNewQuote }) => {
   const { user } = useAppContext();
   const [clients, setClients] = useState<ClientWithStats[]>([]);
   const [loading, setLoading] = useState(true);
@@ -483,6 +487,7 @@ const ClientDirectory: React.FC = () => {
         open={showDrawer}
         onClose={() => { setShowDrawer(false); setSelectedClient(null); }}
         onUpdated={loadClients}
+        onNewQuote={onNewQuote ? (clientId) => { setShowDrawer(false); onNewQuote(clientId); } : undefined}
       />
     </div>
   );

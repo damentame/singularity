@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   X, Mail, Phone, MapPin, Building2, Calendar, Users, Tag,
   FileText, Palette, Clock, ChevronRight, Loader2, Edit3,
-  Save, Image, Briefcase, Heart, PartyPopper, DollarSign, TrendingUp
+  Save, Image, Briefcase, Heart, PartyPopper, DollarSign, TrendingUp, Plus
 } from 'lucide-react';
 import { DbClient, DbClientEvent, fetchClientEvents, updateClient, getDbClientDisplayName } from '@/data/clientDbStore';
 import { getCountryByCode } from '@/data/countries';
@@ -16,6 +16,7 @@ interface ClientDetailDrawerProps {
   open: boolean;
   onClose: () => void;
   onUpdated: () => void;
+  onNewQuote?: (clientId: string) => void;
 }
 
 const TYPE_ICONS: Record<string, React.FC<any>> = {
@@ -24,7 +25,7 @@ const TYPE_ICONS: Record<string, React.FC<any>> = {
   corporate: Briefcase,
 };
 
-const ClientDetailDrawer: React.FC<ClientDetailDrawerProps> = ({ client, open, onClose, onUpdated }) => {
+const ClientDetailDrawer: React.FC<ClientDetailDrawerProps> = ({ client, open, onClose, onUpdated, onNewQuote }) => {
   const [events, setEvents] = useState<DbClientEvent[]>([]);
   const [loadingEvents, setLoadingEvents] = useState(false);
   const [activeTab, setActiveTab] = useState<'profile' | 'history' | 'suppliers' | 'moodboards'>('profile');
@@ -130,9 +131,20 @@ const ClientDetailDrawer: React.FC<ClientDetailDrawerProps> = ({ client, open, o
                 </div>
               </div>
             </div>
-            <button onClick={onClose} className="p-2 rounded-lg hover:bg-black/5 transition-colors">
-              <X className="w-5 h-5 text-gray-400" />
-            </button>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              {onNewQuote && (
+                <button
+                  onClick={() => onNewQuote(client.id)}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-all hover:shadow-sm"
+                  style={{ backgroundColor: GOLD, color: '#FFF' }}
+                >
+                  <Plus className="w-3.5 h-3.5" /> New Quote
+                </button>
+              )}
+              <button onClick={onClose} className="p-2 rounded-lg hover:bg-black/5 transition-colors">
+                <X className="w-5 h-5 text-gray-400" />
+              </button>
+            </div>
           </div>
 
           {/* Quick Stats */}

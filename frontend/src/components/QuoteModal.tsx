@@ -194,7 +194,7 @@ const QuoteModal: React.FC = () => {
                     </button>
                   </PopoverTrigger>
                   <PopoverContent 
-                    className="w-auto p-0 bg-white border-0 shadow-2xl rounded-xl overflow-hidden" 
+                    className="w-auto p-0 bg-white border-0 shadow-2xl rounded-2xl overflow-hidden"
                     align="start"
                     sideOffset={8}
                   >
@@ -247,14 +247,14 @@ const QuoteModal: React.FC = () => {
                         nav: "hidden", // We use custom navigation
                         table: "w-full border-collapse",
                         head_row: "flex mb-2",
-                        head_cell: "text-gray-500 rounded-md w-10 font-medium text-xs uppercase tracking-wide",
+                        head_cell: "text-gray-500 rounded-md w-11 font-medium text-xs uppercase tracking-wide",
                         row: "flex w-full",
                         cell: cn(
                           "relative p-0 text-center text-sm focus-within:relative focus-within:z-20",
                           "[&:has([aria-selected])]:bg-transparent"
                         ),
                         day: cn(
-                          "h-10 w-10 p-0 font-normal rounded-full transition-all duration-200",
+                          "h-11 w-11 p-0 font-normal rounded-full transition-all duration-200",
                           "hover:bg-gold/10 hover:text-navy",
                           "focus:outline-none focus:ring-2 focus:ring-gold focus:ring-offset-2",
                           "aria-selected:opacity-100"

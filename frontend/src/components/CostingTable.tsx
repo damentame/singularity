@@ -39,15 +39,20 @@ const RFQ_STATUS_CONFIG: Record<string, { label: string; color: string; bg: stri
 interface CostingTableProps {
   event: PlannerEvent;
   onHireSupplier: (lineItemId: string) => void;
+  defaultMomentId?: string;
 }
 
-const CostingTable: React.FC<CostingTableProps> = ({ event, onHireSupplier }) => {
+const CostingTable: React.FC<CostingTableProps> = ({ event, onHireSupplier, defaultMomentId }) => {
   const fmt = makeFmt(event);
   const { updateLineItem, removeLineItem, addLineItem, calculateLineItem, getSpecsForItem } = useEventContext();
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [showAdvanced, setShowAdvanced] = useState<Record<string, boolean>>({});
   const [addingTo, setAddingTo] = useState<ItemCategory | null>(null);
   const [newItemName, setNewItemName] = useState('');
+  const [newItemQty, setNewItemQty] = useState('1');
+  const [newItemUnitCost, setNewItemUnitCost] = useState('');
+  const [newItemMarkup, setNewItemMarkup] = useState('30');
+  const [newItemMomentId, setNewItemMomentId] = useState(defaultMomentId || '');
   const [imageUrlInput, setImageUrlInput] = useState<Record<string, string>>({});
   const [uploading, setUploading] = useState<Record<string, boolean>>({});
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
@@ -75,11 +80,14 @@ const CostingTable: React.FC<CostingTableProps> = ({ event, onHireSupplier }) =>
 
   const handleAddItem = (category: ItemCategory) => {
     if (!newItemName.trim()) return;
+    const quantity = Math.max(0, parseInt(newItemQty, 10) || 0);
+    const unitCost = Math.max(0, parseFloat(newItemUnitCost) || 0);
+    const markupPercent = Math.max(0, parseFloat(newItemMarkup) || 0);
     addLineItem(event.id, {
-      name: newItemName.trim(), category, quantity: 1, isGuestDependent: false, guestRatio: 0,
-      unitCost: 0, setupCost: 0, breakdownCost: 0, deliveryCost: 0, deliveryType: 'flat',
-      markupPercent: 30, flagged: false, notes: '', rfqSent: false, rfqJobCode: '',
-      momentId: '', timeType: 'normal', imageUrl: '', productId: '', programId: '',
+      name: newItemName.trim(), category, quantity, isGuestDependent: false, guestRatio: 0,
+      unitCost, setupCost: 0, breakdownCost: 0, deliveryCost: 0, deliveryType: 'flat',
+      markupPercent, flagged: false, notes: '', rfqSent: false, rfqJobCode: '',
+      momentId: newItemMomentId, timeType: 'normal', imageUrl: '', productId: '', programId: '',
       internalNotes: '', clientVisibleNotes: '', specIds: [],
       supplierAssignmentId: '',
       supplierPriceIncludesVat: event.defaultPricesIncludeVat ?? true,
@@ -87,6 +95,10 @@ const CostingTable: React.FC<CostingTableProps> = ({ event, onHireSupplier }) =>
       isDryHire: false,
     });
     setNewItemName('');
+    setNewItemQty('1');
+    setNewItemUnitCost('');
+    setNewItemMarkup('30');
+    setNewItemMomentId(defaultMomentId || '');
     setAddingTo(null);
   };
 
@@ -271,6 +283,22 @@ const CostingTable: React.FC<CostingTableProps> = ({ event, onHireSupplier }) =>
                             <div className="min-w-0 flex-1">
                               <span className="text-xs font-medium truncate block" style={{ color: '#1A1A1A' }}>{item.name}</span>
                               <div className="flex items-center gap-1 mt-0.5 flex-wrap">
+                                {moments.length > 0 && (
+                                  <select
+                                    value={item.momentId || ''}
+                                    onChange={(e) => updateLineItem(event.id, item.id, { momentId: e.target.value })}
+                                    onClick={(e) => e.stopPropagation()}
+                                    title="Click to assign this item to a moment"
+                                    className="text-[8px] pl-1.5 pr-3 py-0.5 rounded-full font-medium border-0 outline-none appearance-none cursor-pointer"
+                                    style={{
+                                      backgroundColor: assignedMoment ? 'rgba(139,92,246,0.08)' : 'rgba(0,0,0,0.04)',
+                                      color: assignedMoment ? '#8B5CF6' : '#999',
+                                    }}
+                                  >
+                                    <option value="">+ Moment</option>
+                                    {moments.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+                                  </select>
+                                )}
                                 {item.flagged && (
                                   <AlertCircle className="w-3 h-3 text-amber-500 flex-shrink-0" />
                                 )}
@@ -467,18 +495,6 @@ const CostingTable: React.FC<CostingTableProps> = ({ event, onHireSupplier }) =>
                                   ))}
                                 </div>
                               </div>
-                              <div className="min-w-[140px]">
-                                <label className="text-[9px] uppercase tracking-wider text-gray-400 block mb-1">Assign to Moment</label>
-                                <div className="relative">
-                                  <select value={item.momentId || ''} onChange={(e) => updateLineItem(event.id, item.id, { momentId: e.target.value })}
-                                    className="w-full h-7 text-xs rounded-lg border px-2 outline-none appearance-none bg-white pr-6"
-                                    style={{ borderColor: 'rgba(201,162,74,0.15)', color: item.momentId ? '#1A1A1A' : '#999' }}>
-                                    <option value="">Overall Event</option>
-                                    {moments.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
-                                  </select>
-                                  <ChevronDown className="absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400 pointer-events-none" />
-                                </div>
-                              </div>
                               <div className="flex-1 min-w-[150px]">
                                 <label className="text-[9px] uppercase tracking-wider text-gray-400 block mb-1">Notes</label>
                                 <input type="text" value={item.notes} onChange={(e) => updateLineItem(event.id, item.id, { notes: e.target.value })}
@@ -576,18 +592,47 @@ const CostingTable: React.FC<CostingTableProps> = ({ event, onHireSupplier }) =>
                   {/* Add Item */}
                   <div className="px-4 py-2.5">
                     {addingTo === cat ? (
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <input type="text" value={newItemName} onChange={(e) => setNewItemName(e.target.value)}
                           onKeyDown={(e) => { if (e.key === 'Enter') handleAddItem(cat); if (e.key === 'Escape') setAddingTo(null); }}
-                          placeholder="Item name..." className="flex-1 h-7 text-xs rounded-lg border px-2.5 outline-none"
+                          placeholder="Item name..." className="flex-1 min-w-[140px] h-7 text-xs rounded-lg border px-2.5 outline-none"
                           style={{ borderColor: GOLD, color: '#1A1A1A' }} autoFocus />
+                        <input type="text" inputMode="numeric" value={newItemQty} onChange={(e) => setNewItemQty(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === 'Enter') handleAddItem(cat); if (e.key === 'Escape') setAddingTo(null); }}
+                          placeholder="Qty" title="Quantity" className="w-14 h-7 text-xs text-center rounded-lg border px-1.5 outline-none"
+                          style={{ borderColor: 'rgba(201,162,74,0.3)', color: '#1A1A1A' }} />
+                        <div className="relative">
+                          <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-gray-400">{getCountryConfigOrDefault(event.country || 'ZA').currencySymbol}</span>
+                          <input type="text" inputMode="decimal" value={newItemUnitCost} onChange={(e) => setNewItemUnitCost(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === 'Enter') handleAddItem(cat); if (e.key === 'Escape') setAddingTo(null); }}
+                            placeholder="0.00" title="Unit cost" className="w-20 h-7 text-xs rounded-lg border pl-6 pr-1.5 outline-none"
+                            style={{ borderColor: 'rgba(201,162,74,0.3)', color: '#1A1A1A' }} />
+                        </div>
+                        <div className="relative">
+                          <input type="text" inputMode="decimal" value={newItemMarkup} onChange={(e) => setNewItemMarkup(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === 'Enter') handleAddItem(cat); if (e.key === 'Escape') setAddingTo(null); }}
+                            placeholder="30" title="Markup %" className="w-14 h-7 text-xs rounded-lg border pl-1.5 pr-4 outline-none"
+                            style={{ borderColor: 'rgba(201,162,74,0.3)', color: '#1A1A1A' }} />
+                          <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px] text-gray-400">%</span>
+                        </div>
+                        {!defaultMomentId && moments.length > 0 && (
+                          <div className="relative">
+                            <select value={newItemMomentId} onChange={(e) => setNewItemMomentId(e.target.value)}
+                              title="Assign to moment" className="h-7 text-[11px] rounded-lg border pl-2 pr-5 outline-none appearance-none bg-white"
+                              style={{ borderColor: 'rgba(201,162,74,0.3)', color: newItemMomentId ? '#1A1A1A' : '#999' }}>
+                              <option value="">Overall Event</option>
+                              {moments.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+                            </select>
+                            <ChevronDown className="absolute right-1.5 top-1/2 -translate-y-1/2 w-2.5 h-2.5 text-gray-400 pointer-events-none" />
+                          </div>
+                        )}
                         <button onClick={() => handleAddItem(cat)} className="px-3 h-7 rounded-lg text-xs font-medium"
                           style={{ backgroundColor: GOLD, color: '#FFF' }}>Add</button>
-                        <button onClick={() => { setAddingTo(null); setNewItemName(''); }}
+                        <button onClick={() => { setAddingTo(null); setNewItemName(''); setNewItemQty('1'); setNewItemUnitCost(''); setNewItemMarkup('30'); setNewItemMomentId(defaultMomentId || ''); }}
                           className="px-2 h-7 rounded-lg text-xs text-gray-400 hover:text-gray-600">Cancel</button>
                       </div>
                     ) : (
-                      <button onClick={() => setAddingTo(cat)}
+                      <button onClick={() => { setNewItemMomentId(defaultMomentId || ''); setAddingTo(cat); }}
                         className="flex items-center gap-1.5 text-[11px] font-medium transition-colors hover:opacity-70" style={{ color: GOLD }}>
                         <Plus className="w-3.5 h-3.5" /> Add item to {CATEGORY_LABELS[cat]}
                       </button>

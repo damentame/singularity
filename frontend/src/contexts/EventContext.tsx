@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useMemo } from 'react';
 import { getCountryConfigOrDefault, calculateVatBreakdown, formatCurrency, getCurrencySymbol } from '@/data/countryConfig';
+import { convertCurrency, getExchangeRates } from '@/data/exchangeRates';
 
 
 
@@ -909,6 +910,7 @@ interface EventContextType {
   deleteEvent: (eventId: string) => void;
   selectEvent: (eventId: string | null) => void;
   updateGuestCount: (eventId: string, newCount: number) => void;
+  convertEventCurrency: (eventId: string, newCurrency: string) => void;
   updateLineItem: (eventId: string, itemId: string, updates: Partial<CostLineItem>) => void;
   addLineItem: (eventId: string, item: Omit<CostLineItem, 'id'>) => void;
   removeLineItem: (eventId: string, itemId: string) => void;
@@ -974,6 +976,7 @@ export interface CreateEventParams {
   divisionName?: string;
   eventTitle?: string;
   clientAccountId?: string;            // v11: linked client account
+  useStandardCatalog?: boolean;        // v13: seed from the standard catalog instead of starting blank
 }
 
 
@@ -1032,15 +1035,17 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     // v8: Resolve country config for finance defaults
     const countryConfig = getCountryConfigOrDefault(params.country || 'ZA');
 
-    const lineItems: CostLineItem[] = defaultLineItems.map(item => ({
-      ...item,
-      supplierAssignmentId: '',
-      supplierPriceIncludesVat: countryConfig.defaultPricesIncludeVat,
-      vatRateUsed: countryConfig.vatRate,
-      isDryHire: false,
-      id: `li-${crypto.randomUUID()}`,
-      quantity: item.isGuestDependent ? Math.max(1, Math.ceil(params.guestCount * item.guestRatio)) : item.quantity,
-    }));
+    const lineItems: CostLineItem[] = params.useStandardCatalog
+      ? defaultLineItems.map(item => ({
+          ...item,
+          supplierAssignmentId: '',
+          supplierPriceIncludesVat: countryConfig.defaultPricesIncludeVat,
+          vatRateUsed: countryConfig.vatRate,
+          isDryHire: false,
+          id: `li-${crypto.randomUUID()}`,
+          quantity: item.isGuestDependent ? Math.max(1, Math.ceil(params.guestCount * item.guestRatio)) : item.quantity,
+        }))
+      : [];
 
 
 
@@ -1123,6 +1128,32 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         return { ...item, quantity: newQty, flagged: newQty !== item.quantity };
       });
       return { ...e, guestCount: newCount, lineItems: updatedItems, updatedAt: new Date().toISOString() };
+    }));
+  }, [events, persistEvents]);
+
+  // v14: rescales every line item's cost fields from the event's current currency to
+  // newCurrency using the static major-currency rate table, so the quote total actually
+  // changes to match rather than just relabeling the displayed symbol.
+  const convertEventCurrency = useCallback((eventId: string, newCurrency: string) => {
+    const rates = getExchangeRates();
+    persistEvents(events.map(e => {
+      if (e.id !== eventId) return e;
+      const oldCurrency = e.currency || 'ZAR';
+      if (oldCurrency === newCurrency) return e;
+      const rescale = (n: number) => Math.round(convertCurrency(n, oldCurrency, newCurrency, rates) * 100) / 100;
+      return {
+        ...e,
+        currency: newCurrency,
+        billingCurrency: newCurrency,
+        lineItems: e.lineItems.map(item => ({
+          ...item,
+          unitCost: rescale(item.unitCost),
+          deliveryCost: rescale(item.deliveryCost),
+          setupCost: rescale(item.setupCost),
+          breakdownCost: rescale(item.breakdownCost),
+        })),
+        updatedAt: new Date().toISOString(),
+      };
     }));
   }, [events, persistEvents]);
 
@@ -1641,7 +1672,7 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     <EventContext.Provider value={{
       events, selectedEventId, selectedEvent,
       createEvent, updateEvent, deleteEvent, selectEvent,
-      updateGuestCount, updateLineItem, addLineItem, removeLineItem,
+      updateGuestCount, convertEventCurrency, updateLineItem, addLineItem, removeLineItem,
       calculateLineItem, calculateSummary, getCalculatedItems,
       saveVersion, restoreVersion, duplicateEvent, addRFQMessage,
       addVenueSpace, updateVenueSpace, removeVenueSpace,

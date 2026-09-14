@@ -2,17 +2,18 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import {
   X, Heart, PartyPopper, Building2, ChevronDown, ChevronRight, ChevronLeft,
   Search, UserPlus, Check, Phone, Mail, User, Briefcase, BookTemplate, Loader2, Layers, FileText, Trash2,
+  FilePlus,
 } from 'lucide-react';
-import { EventType, EVENT_TYPE_LABELS, CreateEventParams, ClientAccount, ClientType } from '@/contexts/EventContext';
+import { EventType, EVENT_TYPE_LABELS, CreateEventParams, ClientType } from '@/contexts/EventContext';
+import { useAppContext } from '@/contexts/AppContext';
 import { COUNTRIES, POPULAR_COUNTRIES, getCountryByCode } from '@/data/countries';
 import {
-  getAllClientAccounts,
-  createClientAccount,
-  getClientDisplayName,
-  searchClientAccounts,
-} from '@/data/clientAccountStore';
+  DbClient,
+  fetchClients,
+  createClient,
+  getDbClientDisplayName,
+} from '@/data/clientDbStore';
 import FastQuantityInput from './FastQuantityInput';
-import { useTemplatePersistence, TemplateSummary, TemplateData } from '@/hooks/useTemplatePersistence';
 import { toast } from '@/components/ui/use-toast';
 
 
@@ -40,9 +41,12 @@ interface CreateEventModalProps {
   open: boolean;
   onClose: () => void;
   onCreate: (params: CreateEventParams) => void;
+  preselectedClientId?: string;
 }
 
-const CreateEventModal: React.FC<CreateEventModalProps> = ({ open, onClose, onCreate }) => {
+const CreateEventModal: React.FC<CreateEventModalProps> = ({ open, onClose, onCreate, preselectedClientId }) => {
+  const { user } = useAppContext();
+
   // ─── Step state ────────────────────────────────────────────────────────────
   const [step, setStep] = useState<1 | 2>(1);
 
@@ -52,6 +56,9 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({ open, onClose, onCr
   const [selectedAccountId, setSelectedAccountId] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState('');
   const [showDropdown, setShowDropdown] = useState(false);
+  const [allAccounts, setAllAccounts] = useState<DbClient[]>([]);
+  const [loadingAccounts, setLoadingAccounts] = useState(false);
+  const [creatingClient, setCreatingClient] = useState(false);
 
   // New client fields
   const [newClientName, setNewClientName] = useState('');
@@ -74,6 +81,7 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({ open, onClose, onCr
   const [companyName, setCompanyName] = useState('');
   const [divisionName, setDivisionName] = useState('');
   const [eventTitle, setEventTitle] = useState('');
+  const [startingPoint, setStartingPoint] = useState<'blank' | 'catalog'>('blank');
 
   const searchRef = useRef<HTMLDivElement>(null);
 
@@ -88,11 +96,23 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({ open, onClose, onCr
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  // ─── Existing accounts ─────────────────────────────────────────────────────
-  const allAccounts = useMemo(() => getAllClientAccounts(), [open]);
+  // ─── Existing accounts (shared Supabase client directory) ──────────────────
+  useEffect(() => {
+    if (!open) return;
+    setLoadingAccounts(true);
+    fetchClients()
+      .then(setAllAccounts)
+      .finally(() => setLoadingAccounts(false));
+  }, [open]);
+
   const filteredAccounts = useMemo(() => {
-    if (!searchQuery.trim()) return allAccounts;
-    return searchClientAccounts(searchQuery);
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return allAccounts;
+    return allAccounts.filter(a =>
+      a.primary_contact_name.toLowerCase().includes(q) ||
+      a.primary_contact_email.toLowerCase().includes(q) ||
+      a.company_name.toLowerCase().includes(q)
+    );
   }, [allAccounts, searchQuery]);
 
   const selectedAccount = useMemo(
@@ -131,12 +151,33 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({ open, onClose, onCr
       setCompanyName('');
       setDivisionName('');
       setEventTitle('');
+      setStartingPoint('blank');
     }
   }, [open]);
+
+  // ─── Jump straight to Step 2 when opened for a specific (already-onboarded) client ──
+  useEffect(() => {
+    if (!open || !preselectedClientId || loadingAccounts) return;
+    const account = allAccounts.find(a => a.id === preselectedClientId);
+    if (!account) return;
+    setClientMode('search');
+    setSelectedAccountId(account.id);
+    setSearchQuery(getDbClientDisplayName(account));
+    if (account.client_type === 'corporate') setEventType('corporate');
+    applyAccountPrefill(account);
+    setStep(2);
+  }, [open, preselectedClientId, allAccounts, loadingAccounts]);
 
   if (!open) return null;
 
   const isCorporate = eventType === 'corporate';
+
+  // ─── Pre-fill Step 2 fields from a resolved client account ─────────────────
+  function applyAccountPrefill(account: DbClient) {
+    if (account.country) setCountry(account.country);
+    if (account.client_type === 'corporate' && account.company_name) setCompanyName(account.company_name);
+    if (account.client_type !== 'corporate' && account.primary_contact_name) setEventName(prev => prev || account.primary_contact_name);
+  }
 
   // ─── Step 1 validation ─────────────────────────────────────────────────────
   const canProceedToStep2 = () => {
@@ -149,52 +190,46 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({ open, onClose, onCr
   };
 
   // ─── Proceed to Step 2 ────────────────────────────────────────────────────
-  const handleProceed = () => {
-    if (!canProceedToStep2()) return;
+  const handleProceed = async () => {
+    if (!canProceedToStep2() || creatingClient) return;
 
-    let accountId = selectedAccountId;
-
-    // If creating new client, persist it now
+    // If creating a new client, persist it to the shared client directory now
     if (clientMode === 'new') {
-      const account = createClientAccount({
-        clientType: CLIENT_TYPE_MAP[eventType],
-        primaryContactName: newClientName.trim(),
-        primaryContactEmail: newClientEmail.trim(),
-        primaryContactPhoneCode: newClientPhoneCode,
-        primaryContactPhone: newClientPhone.trim(),
-        country: newClientCountry,
-        region: '',
-        city: '',
-        billingAddress: '',
-        vatNumber: '',
-        companyName: isCorporate ? newClientCompany.trim() : '',
-        isActive: true,
-      });
-      accountId = account.id;
-      setSelectedAccountId(accountId);
-    }
-
-    // Pre-fill Step 2 from client account
-    const acct = clientMode === 'new'
-      ? { primaryContactName: newClientName.trim(), companyName: newClientCompany.trim(), country: newClientCountry }
-      : selectedAccount;
-
-    if (acct) {
-      // Pre-fill country from client
-      if ('country' in acct && acct.country) {
-        setCountry(acct.country as string);
-      }
-      // Pre-fill corporate company name
-      if (isCorporate && 'companyName' in acct && (acct as any).companyName) {
-        setCompanyName((acct as any).companyName);
-      }
-      // Pre-fill event name from client name
-      if (!isCorporate) {
-        const clientName = 'primaryContactName' in acct ? (acct as any).primaryContactName : '';
-        if (clientName && !eventName) {
-          setEventName(clientName);
+      if (!user?.id) return;
+      setCreatingClient(true);
+      try {
+        const account = await createClient({
+          coordinator_id: user.id,
+          client_type: CLIENT_TYPE_MAP[eventType],
+          primary_contact_name: newClientName.trim(),
+          primary_contact_email: newClientEmail.trim(),
+          primary_contact_phone_code: newClientPhoneCode,
+          primary_contact_phone: newClientPhone.trim(),
+          company_name: isCorporate ? newClientCompany.trim() : '',
+          country: newClientCountry,
+          region: '',
+          city: '',
+          billing_address: '',
+          vat_number: '',
+          style_preferences: {},
+          budget_history: [],
+          notes: '',
+          mood_board_refs: [],
+          tags: [],
+          is_active: true,
+        });
+        if (!account) {
+          toast({ title: 'Error', description: 'Could not save client. Please try again.', variant: 'destructive' });
+          return;
         }
+        setAllAccounts(prev => [account, ...prev]);
+        setSelectedAccountId(account.id);
+        applyAccountPrefill(account);
+      } finally {
+        setCreatingClient(false);
       }
+    } else if (selectedAccount) {
+      applyAccountPrefill(selectedAccount);
     }
 
     setStep(2);
@@ -221,13 +256,14 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({ open, onClose, onCr
       divisionName: isCorporate ? divisionName.trim() : undefined,
       eventTitle: isCorporate ? eventTitle.trim() : undefined,
       clientAccountId: selectedAccountId,
+      useStandardCatalog: startingPoint === 'catalog',
     });
   };
 
   // ─── Select existing account ───────────────────────────────────────────────
-  const handleSelectAccount = (account: ClientAccount) => {
+  const handleSelectAccount = (account: DbClient) => {
     setSelectedAccountId(account.id);
-    setSearchQuery(getClientDisplayName(account));
+    setSearchQuery(getDbClientDisplayName(account));
     setShowDropdown(false);
   };
 
@@ -388,7 +424,11 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({ open, onClose, onCr
                       className="absolute z-10 top-full left-0 right-0 mt-1 bg-white rounded-xl border shadow-lg max-h-48 overflow-y-auto"
                       style={{ borderColor: 'rgba(201,162,74,0.2)' }}
                     >
-                      {filteredAccounts.length === 0 ? (
+                      {loadingAccounts ? (
+                        <div className="px-4 py-6 text-center text-xs text-gray-400">
+                          <Loader2 className="w-4 h-4 animate-spin inline mr-1.5" /> Loading clients...
+                        </div>
+                      ) : filteredAccounts.length === 0 ? (
                         <div className="px-4 py-6 text-center">
                           <p className="text-xs text-gray-400 mb-2">No clients found</p>
                           <button
@@ -428,22 +468,22 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({ open, onClose, onCr
                                 className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"
                                 style={{ backgroundColor: 'rgba(201,162,74,0.1)' }}
                               >
-                                {acct.clientType === 'corporate'
+                                {acct.client_type === 'corporate'
                                   ? <Building2 className="w-3.5 h-3.5" style={{ color: GOLD }} />
-                                  : acct.clientType === 'wedding'
+                                  : acct.client_type === 'wedding'
                                     ? <Heart className="w-3.5 h-3.5" style={{ color: GOLD }} />
                                     : <PartyPopper className="w-3.5 h-3.5" style={{ color: GOLD }} />
                                 }
                               </div>
                               <div className="flex-1 min-w-0">
                                 <div className="text-sm font-medium text-gray-800 truncate">
-                                  {getClientDisplayName(acct)}
+                                  {getDbClientDisplayName(acct)}
                                 </div>
                                 <div className="text-[10px] text-gray-400 truncate">
-                                  {acct.clientType === 'corporate' && acct.primaryContactName && (
-                                    <span>Contact: {acct.primaryContactName} · </span>
+                                  {acct.client_type === 'corporate' && acct.primary_contact_name && (
+                                    <span>Contact: {acct.primary_contact_name} · </span>
                                   )}
-                                  {acct.primaryContactEmail}
+                                  {acct.primary_contact_email}
                                   {countryObj ? ` · ${countryObj.flag} ${countryObj.name}` : ''}
                                 </div>
 
@@ -452,7 +492,7 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({ open, onClose, onCr
                                 className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded-full font-medium flex-shrink-0"
                                 style={{ backgroundColor: 'rgba(201,162,74,0.08)', color: GOLD }}
                               >
-                                {acct.clientType}
+                                {acct.client_type}
                               </span>
                             </button>
                           );
@@ -471,21 +511,21 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({ open, onClose, onCr
                         className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0"
                         style={{ backgroundColor: 'rgba(201,162,74,0.1)' }}
                       >
-                        {selectedAccount.clientType === 'corporate'
+                        {selectedAccount.client_type === 'corporate'
                           ? <Building2 className="w-4 h-4" style={{ color: GOLD }} />
                           : <User className="w-4 h-4" style={{ color: GOLD }} />
                         }
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="text-sm font-medium text-gray-800">
-                          {getClientDisplayName(selectedAccount)}
+                          {getDbClientDisplayName(selectedAccount)}
                         </div>
                         <div className="text-[10px] text-gray-400">
-                          {selectedAccount.clientType === 'corporate' && selectedAccount.primaryContactName && (
-                            <span className="mr-1.5">Contact: {selectedAccount.primaryContactName} ·</span>
+                          {selectedAccount.client_type === 'corporate' && selectedAccount.primary_contact_name && (
+                            <span className="mr-1.5">Contact: {selectedAccount.primary_contact_name} ·</span>
                           )}
-                          {selectedAccount.primaryContactEmail}
-                          {selectedAccount.primaryContactPhone ? ` · ${selectedAccount.primaryContactPhoneCode} ${selectedAccount.primaryContactPhone}` : ''}
+                          {selectedAccount.primary_contact_email}
+                          {selectedAccount.primary_contact_phone ? ` · ${selectedAccount.primary_contact_phone_code} ${selectedAccount.primary_contact_phone}` : ''}
                         </div>
                       </div>
                       <button
@@ -691,12 +731,18 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({ open, onClose, onCr
             <button
               type="button"
               onClick={handleProceed}
-              disabled={!canProceedToStep2()}
+              disabled={!canProceedToStep2() || creatingClient}
               className="w-full py-3 rounded-lg text-sm font-medium uppercase tracking-wider transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
               style={{ backgroundColor: GOLD, color: '#FFF' }}
             >
-              Continue to Event Details
-              <ChevronRight className="w-4 h-4" />
+              {creatingClient ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <>
+                  Continue to Event Details
+                  <ChevronRight className="w-4 h-4" />
+                </>
+              )}
             </button>
           </div>
         )}
@@ -719,7 +765,7 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({ open, onClose, onCr
                 <div className="text-[10px] uppercase tracking-wider text-gray-400">Client</div>
                 <div className="text-sm font-medium text-gray-700 truncate">
                   {selectedAccount
-                    ? getClientDisplayName(selectedAccount)
+                    ? getDbClientDisplayName(selectedAccount)
                     : isCorporate
                       ? (newClientCompany || newClientName)
                       : newClientName
@@ -730,14 +776,14 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({ open, onClose, onCr
                     Contact: {newClientName}
                   </div>
                 )}
-                {selectedAccount?.clientType === 'corporate' && selectedAccount.primaryContactName && (
+                {selectedAccount?.client_type === 'corporate' && selectedAccount.primary_contact_name && (
                   <div className="text-[10px] text-gray-400 truncate">
-                    Contact: {selectedAccount.primaryContactName} · {selectedAccount.primaryContactEmail}
+                    Contact: {selectedAccount.primary_contact_name} · {selectedAccount.primary_contact_email}
                   </div>
                 )}
-                {selectedAccount && selectedAccount.clientType !== 'corporate' && selectedAccount.primaryContactEmail && (
+                {selectedAccount && selectedAccount.client_type !== 'corporate' && selectedAccount.primary_contact_email && (
                   <div className="text-[10px] text-gray-400 truncate">
-                    {selectedAccount.primaryContactEmail}
+                    {selectedAccount.primary_contact_email}
                   </div>
                 )}
               </div>
@@ -953,6 +999,48 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({ open, onClose, onCr
                 max={2000}
                 presets={[50, 80, 100, 120, 150, 200, 250]}
               />
+            </div>
+
+            {/* Starting Point */}
+            <div>
+              <label className="block text-[10px] uppercase tracking-[0.15em] mb-3" style={{ color: GOLD, fontWeight: 600 }}>
+                <FilePlus className="w-3 h-3 inline mr-1" />
+                Starting Point
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setStartingPoint('blank')}
+                  className="flex flex-col items-start gap-1 py-3 px-3 rounded-xl border text-left transition-all"
+                  style={{
+                    backgroundColor: startingPoint === 'blank' ? 'rgba(201,162,74,0.06)' : '#FFF',
+                    borderColor: startingPoint === 'blank' ? GOLD : '#EFEFEF',
+                  }}
+                >
+                  <span className="text-xs font-medium" style={{ color: startingPoint === 'blank' ? GOLD : '#1A1A1A' }}>
+                    Start Blank
+                  </span>
+                  <span className="text-[9px] text-gray-400 leading-tight">
+                    Empty quote — add items as you build
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStartingPoint('catalog')}
+                  className="flex flex-col items-start gap-1 py-3 px-3 rounded-xl border text-left transition-all"
+                  style={{
+                    backgroundColor: startingPoint === 'catalog' ? 'rgba(201,162,74,0.06)' : '#FFF',
+                    borderColor: startingPoint === 'catalog' ? GOLD : '#EFEFEF',
+                  }}
+                >
+                  <span className="text-xs font-medium" style={{ color: startingPoint === 'catalog' ? GOLD : '#1A1A1A' }}>
+                    Standard Catalog
+                  </span>
+                  <span className="text-[9px] text-gray-400 leading-tight">
+                    Pre-fill with common items &amp; typical pricing
+                  </span>
+                </button>
+              </div>
             </div>
 
             <button

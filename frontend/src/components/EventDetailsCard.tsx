@@ -15,6 +15,7 @@ import {
 import { COUNTRIES, POPULAR_COUNTRIES, getDialCodeByCountry } from '@/data/countries';
 import { useConfigOptions } from '@/hooks/useConfigOptions';
 import FastQuantityInput from './FastQuantityInput';
+import CurrencySwitcher from './CurrencySwitcher';
 
 
 const GOLD = '#C9A24A';
@@ -476,6 +477,10 @@ const EventDetailsCard: React.FC<EventDetailsCardProps> = ({ event }) => {
         <div>
           <FieldLabel required><Globe className="w-3 h-3 inline mr-1" style={{ color: GOLD }} />Country</FieldLabel>
           <CountrySelect value={event.country || ''} onChange={handleCountryChange} />
+        </div>
+        <div>
+          <FieldLabel><Globe className="w-3 h-3 inline mr-1" style={{ color: GOLD }} />Currency</FieldLabel>
+          <CurrencySwitcher event={event} />
         </div>
         <div>
           <FieldLabel>Region / State</FieldLabel>

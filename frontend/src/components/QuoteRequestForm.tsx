@@ -317,7 +317,7 @@ const QuoteRequestForm: React.FC<QuoteRequestFormProps> = ({
                 <ChevronRight className="w-4 h-4 text-white/40" />
               </button>
             </PopoverTrigger>
-            <PopoverContent className="w-auto p-0 bg-white border-0 shadow-2xl rounded-xl overflow-hidden" align="start">
+            <PopoverContent className="w-auto p-0 bg-white border-0 shadow-2xl rounded-2xl overflow-hidden" align="start">
               <div className="bg-gradient-to-r from-[#0B1426] to-[#0B1426]/90 p-4 text-white">
                 <p className="text-xs uppercase tracking-wider text-[#B8956A]/80 mb-1">Select Date</p>
                 <p className="text-lg font-semibold">
@@ -356,11 +356,11 @@ const QuoteRequestForm: React.FC<QuoteRequestFormProps> = ({
                   nav: "hidden",
                   table: "w-full border-collapse",
                   head_row: "flex mb-2",
-                  head_cell: "text-gray-500 rounded-md w-10 font-medium text-xs uppercase tracking-wide",
+                  head_cell: "text-gray-500 rounded-md w-11 font-medium text-xs uppercase tracking-wide",
                   row: "flex w-full",
                   cell: "relative p-0 text-center text-sm",
                   day: cn(
-                    "h-10 w-10 p-0 font-normal rounded-full transition-all duration-200",
+                    "h-11 w-11 p-0 font-normal rounded-full transition-all duration-200",
                     "hover:bg-[#B8956A]/20 hover:text-[#0B1426]"
                   ),
                   day_selected: "bg-[#B8956A] text-white hover:bg-[#B8956A] hover:text-white shadow-lg",

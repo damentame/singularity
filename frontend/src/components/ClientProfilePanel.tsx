@@ -1,11 +1,11 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   User, Building2, Mail, Phone, MapPin, Calendar, DollarSign,
   ChevronDown, ChevronRight, Heart, PartyPopper, Palette, Users,
   Clock, Edit3, Check, X, FileText,
 } from 'lucide-react';
 import { useEventContext, PlannerEvent, getEventDisplayName, EVENT_TYPE_LABELS } from '@/contexts/EventContext';
-import { getClientAccountById, getClientDisplayName, updateClientAccount, getAllClientAccounts } from '@/data/clientAccountStore';
+import { DbClient, getClientById, getDbClientDisplayName } from '@/data/clientDbStore';
 import { getCountryByCode } from '@/data/countries';
 
 const GOLD = '#C9A24A';
@@ -22,9 +22,12 @@ const ClientProfilePanel: React.FC<ClientProfilePanelProps> = ({ event, onOpenEv
   const [editingNotes, setEditingNotes] = useState(false);
   const [notes, setNotes] = useState('');
 
-  const clientAccount = useMemo(() => {
-    if (!event.clientAccountId) return null;
-    return getClientAccountById(event.clientAccountId);
+  const [clientAccount, setClientAccount] = useState<DbClient | null>(null);
+  useEffect(() => {
+    if (!event.clientAccountId) { setClientAccount(null); return; }
+    let cancelled = false;
+    getClientById(event.clientAccountId).then(c => { if (!cancelled) setClientAccount(c); });
+    return () => { cancelled = true; };
   }, [event.clientAccountId]);
 
   // Find all events for this client
@@ -83,9 +86,9 @@ const ClientProfilePanel: React.FC<ClientProfilePanelProps> = ({ event, onOpenEv
         className="w-full flex items-center gap-4 p-5 text-left transition-colors hover:bg-gray-50/50"
       >
         <div className="w-11 h-11 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: 'rgba(201,162,74,0.08)' }}>
-          {clientAccount.clientType === 'corporate'
+          {clientAccount.client_type === 'corporate'
             ? <Building2 className="w-5 h-5" style={{ color: GOLD }} />
-            : clientAccount.clientType === 'wedding'
+            : clientAccount.client_type === 'wedding'
               ? <Heart className="w-5 h-5" style={{ color: GOLD }} />
               : <PartyPopper className="w-5 h-5" style={{ color: GOLD }} />
           }
@@ -93,7 +96,7 @@ const ClientProfilePanel: React.FC<ClientProfilePanelProps> = ({ event, onOpenEv
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <h3 className="text-sm font-medium" style={{ color: '#1A1A1A' }}>
-              {getClientDisplayName(clientAccount)}
+              {getDbClientDisplayName(clientAccount)}
             </h3>
             {isReturning && (
               <span className="text-[9px] px-2 py-0.5 rounded-full font-medium" style={{ backgroundColor: 'rgba(139,92,246,0.08)', color: '#8B5CF6' }}>
@@ -102,14 +105,14 @@ const ClientProfilePanel: React.FC<ClientProfilePanelProps> = ({ event, onOpenEv
             )}
           </div>
           <div className="flex items-center gap-3 mt-0.5 flex-wrap">
-            {clientAccount.primaryContactEmail && (
+            {clientAccount.primary_contact_email && (
               <span className="text-[10px] text-gray-400 flex items-center gap-1">
-                <Mail className="w-2.5 h-2.5" /> {clientAccount.primaryContactEmail}
+                <Mail className="w-2.5 h-2.5" /> {clientAccount.primary_contact_email}
               </span>
             )}
-            {clientAccount.primaryContactPhone && (
+            {clientAccount.primary_contact_phone && (
               <span className="text-[10px] text-gray-400 flex items-center gap-1">
-                <Phone className="w-2.5 h-2.5" /> {clientAccount.primaryContactPhoneCode} {clientAccount.primaryContactPhone}
+                <Phone className="w-2.5 h-2.5" /> {clientAccount.primary_contact_phone_code} {clientAccount.primary_contact_phone}
               </span>
             )}
             {countryObj && (
