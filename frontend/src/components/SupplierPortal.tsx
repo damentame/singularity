@@ -26,6 +26,8 @@ import {
 import { getCurrencySymbol, formatCurrency, calculateVatBreakdown } from '@/data/countryConfig';
 import { supabase } from '@/lib/supabase';
 import SupplierPortalMomentSection, { ItemPriceEntry } from './SupplierPortalMomentSection';
+import RFQMessageThread from './RFQMessageThread';
+import { MessageCircle } from 'lucide-react';
 
 const GOLD = '#C9A24A';
 
@@ -49,6 +51,7 @@ const SupplierPortal: React.FC = () => {
   const [uploading, setUploading] = useState(false);
   const [showConfirmSubmit, setShowConfirmSubmit] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [showMessages, setShowMessages] = useState(false);
   // Compliance documents
   const [complianceDocs, setComplianceDocs] = useState<ComplianceDocument[]>([]);
   const [showComplianceForm, setShowComplianceForm] = useState(false);
@@ -550,6 +553,25 @@ const SupplierPortal: React.FC = () => {
               <span className="text-[10px] font-bold uppercase tracking-wider text-amber-600">Message from Coordinator</span>
             </div>
             <p className="text-xs text-amber-800 leading-relaxed">{batch.messageToSupplier}</p>
+          </div>
+        )}
+
+        {/* ─── Messages ───────────────────────────────────────────────────── */}
+        {supabaseSessionRef.current ? (
+          <button
+            onClick={() => setShowMessages(true)}
+            className="mb-4 w-full flex items-center justify-between p-4 rounded-xl bg-white border transition-colors hover:bg-gray-50"
+            style={{ borderColor: 'rgba(201,162,74,0.15)' }}
+          >
+            <span className="flex items-center gap-2 text-xs font-medium" style={{ color: '#1A1A1A' }}>
+              <MessageCircle className="w-4 h-4" style={{ color: GOLD }} />
+              Message the Coordinator
+            </span>
+            <ArrowRight className="w-3.5 h-3.5 text-gray-400" />
+          </button>
+        ) : (
+          <div className="mb-4 p-3 rounded-xl bg-gray-50 border border-gray-200">
+            <p className="text-[10px] text-gray-400">Messaging isn't available yet for this link — ask your coordinator to resend it.</p>
           </div>
         )}
 
@@ -1125,6 +1147,16 @@ const SupplierPortal: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {showMessages && token && batch && (
+        <RFQMessageThread
+          mode="supplier"
+          portalToken={token}
+          supplierName={batch.supplierName}
+          senderName={batch.supplierName}
+          onClose={() => setShowMessages(false)}
+        />
       )}
     </div>
   );

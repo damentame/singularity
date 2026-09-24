@@ -65,7 +65,7 @@ const FullCostingView: React.FC<FullCostingViewProps> = ({ event, onNavigateToMo
   const MOMENT_COLORS: Record<string, string> = {
     welcome_drinks: '#D4AF5A', ceremony: '#8B5CF6', cocktail_hour: '#3B82F6',
     reception: '#C9A24A', dinner: '#059669', after_party: '#EC4899',
-    breakfast: '#F59E0B', other: '#6B7280',
+    breakfast: '#F59E0B', load_in: '#64748B', load_out: '#64748B', other: '#6B7280',
   };
 
   // Aggregate by moment

@@ -11,6 +11,7 @@ import { toast } from '@/components/ui/use-toast';
 import { useAutoSaveStatus } from './EventAutoSaver';
 import ClientDirectory from './ClientDirectory';
 import { seedDemoData, clearDemoData } from '@/lib/demoSeed';
+import { getVenueOccupiedRange } from '@/data/venueScheduling';
 
 
 
@@ -181,13 +182,14 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ onOpenEvent }) => {
   };
 
   // Calendar helpers
+  interface CalendarDayEvent { event: PlannerEvent; isPadding: boolean }
   const calendarDays = useMemo(() => {
     const year = calendarMonth.getFullYear();
     const month = calendarMonth.getMonth();
     const firstDay = new Date(year, month, 1);
     const lastDay = new Date(year, month + 1, 0);
     const startPad = firstDay.getDay();
-    const days: { date: Date; isCurrentMonth: boolean; events: typeof events }[] = [];
+    const days: { date: Date; isCurrentMonth: boolean; events: CalendarDayEvent[] }[] = [];
     for (let i = startPad - 1; i >= 0; i--) {
       const d = new Date(year, month, -i);
       days.push({ date: d, isCurrentMonth: false, events: [] });
@@ -195,11 +197,16 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ onOpenEvent }) => {
     for (let d = 1; d <= lastDay.getDate(); d++) {
       const date = new Date(year, month, d);
       const dateStr = date.toISOString().split('T')[0];
-      const dayEvents = events.filter(e => {
-        const start = e.date;
-        const end = e.endDate || e.date;
-        return start <= dateStr && dateStr <= end;
-      });
+      const dayEvents = events
+        .filter(e => {
+          const { start, end } = getVenueOccupiedRange(e);
+          return start <= dateStr && dateStr <= end;
+        })
+        .map(e => ({
+          event: e,
+          // Setup/strike padding day vs. the event's actual show dates
+          isPadding: dateStr < e.date || dateStr > (e.endDate || e.date),
+        }));
       days.push({ date, isCurrentMonth: true, events: dayEvents });
     }
     while (days.length < 42) {
@@ -575,8 +582,18 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ onOpenEvent }) => {
                       </span>
                     </div>
                     <div className="space-y-0.5">
-                      {day.events.slice(0, 3).map(evt => (
-                        <button key={evt.id} onClick={() => onOpenEvent(evt.id)} className="w-full text-left px-1.5 py-0.5 rounded text-[9px] truncate transition-colors hover:opacity-80" style={{ backgroundColor: 'rgba(201,162,74,0.1)', color: GOLD }} title={getEventDisplayName(evt)}>
+                      {day.events.slice(0, 3).map(({ event: evt, isPadding }) => (
+                        <button
+                          key={evt.id}
+                          onClick={() => onOpenEvent(evt.id)}
+                          className="w-full text-left px-1.5 py-0.5 rounded text-[9px] truncate transition-colors hover:opacity-80"
+                          style={
+                            isPadding
+                              ? { backgroundColor: 'transparent', color: '#8B8478', border: '1px dashed rgba(139,132,120,0.35)' }
+                              : { backgroundColor: 'rgba(201,162,74,0.1)', color: GOLD }
+                          }
+                          title={`${getEventDisplayName(evt)}${isPadding ? ' (venue setup/strike)' : ''}`}
+                        >
                           {getEventDisplayName(evt)}
                         </button>
                       ))}

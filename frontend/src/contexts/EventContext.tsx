@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useCallback, useMemo } from 'react';
 import { getCountryConfigOrDefault, calculateVatBreakdown, formatCurrency, getCurrencySymbol } from '@/data/countryConfig';
 import { convertCurrency, getExchangeRates } from '@/data/exchangeRates';
+import { getVenueOccupiedRange } from '@/data/venueScheduling';
 
 
 
@@ -220,6 +221,8 @@ export type MomentType =
   | 'dinner'
   | 'after_party'
   | 'breakfast'
+  | 'load_in'
+  | 'load_out'
   | 'other';
 
 export const MOMENT_TYPE_LABELS: Record<MomentType, string> = {
@@ -230,12 +233,15 @@ export const MOMENT_TYPE_LABELS: Record<MomentType, string> = {
   dinner: 'Dinner',
   after_party: 'After Party',
   breakfast: 'Breakfast',
+  load_in: 'Load-In / Setup',
+  load_out: 'Load-Out / Strike',
   other: 'Other',
 };
 
 export const MOMENT_PRESETS = [
   'Welcome Dinner', 'Drinks Reception', 'Ceremony', 'Reception',
-  'After Party', 'Next-Day Breakfast', 'Welcome', 'Main Event', 'After Function', 'Other',
+  'After Party', 'Next-Day Breakfast', 'Welcome', 'Main Event', 'After Function',
+  'Load-In / Setup', 'Load-Out / Strike', 'Other',
 ] as const;
 
 export interface EventMoment {
@@ -672,12 +678,15 @@ export interface PlannerEvent {
   name: string;
   date: string;
   endDate: string;
+  setupDays: number;                   // v14: load-in lead time, days before `date` the venue is needed
+  strikeDays: number;                  // v14: load-out/breakdown time, days after `endDate` the venue is held
   eventType: EventType;
   eventTypeOption?: OptionSelection;
   clientDetails: ClientDetails;
   clientAccountId: string;             // v11: linked client account
   venue: string;
   venueType: VenueType;
+  venueTypeOther: string;              // v14: free-text label when venueType === 'other'
   country: string;
   region: string;
   city: string;
@@ -828,6 +837,8 @@ const inferMomentType = (name: string): MomentType => {
   if (n.includes('dinner') || n.includes('main event')) return 'dinner';
   if (n.includes('after')) return 'after_party';
   if (n.includes('breakfast')) return 'breakfast';
+  if (n.includes('load-in') || n.includes('load in') || n.includes('setup') || n.includes('set-up')) return 'load_in';
+  if (n.includes('load-out') || n.includes('load out') || n.includes('strike') || n.includes('breakdown') || n.includes('teardown')) return 'load_out';
   return 'other';
 };
 
@@ -911,6 +922,7 @@ interface EventContextType {
   selectEvent: (eventId: string | null) => void;
   updateGuestCount: (eventId: string, newCount: number) => void;
   convertEventCurrency: (eventId: string, newCurrency: string) => void;
+  updateVenueScheduling: (eventId: string, updates: { setupDays?: number; strikeDays?: number }) => void;
   updateLineItem: (eventId: string, itemId: string, updates: Partial<CostLineItem>) => void;
   addLineItem: (eventId: string, item: Omit<CostLineItem, 'id'>) => void;
   removeLineItem: (eventId: string, itemId: string) => void;
@@ -977,6 +989,8 @@ export interface CreateEventParams {
   eventTitle?: string;
   clientAccountId?: string;            // v11: linked client account
   useStandardCatalog?: boolean;        // v13: seed from the standard catalog instead of starting blank
+  clientDetails?: ClientDetails;       // v15: pre-filled snapshot from the client record, instead of starting blank
+  currency?: string;                   // v15: explicit currency pick, instead of always deriving from country
 }
 
 
@@ -1054,11 +1068,12 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const newEvent: PlannerEvent = {
       id, name: params.name, date: params.date,
       endDate: params.endDate || params.date,
+      setupDays: 0, strikeDays: 0,
       eventType: params.eventType,
       eventTypeOption: params.eventTypeOption,
-      clientDetails: getDefaultClientDetails(params.eventType),
+      clientDetails: params.clientDetails || getDefaultClientDetails(params.eventType),
       clientAccountId: params.clientAccountId || '',
-      venue: params.venue, venueType: params.venueType || '',
+      venue: params.venue, venueType: params.venueType || '', venueTypeOther: '',
       country: params.country || 'ZA', region: params.region || '', city: params.city || '',
       venueSpaces: [], moments, guestCount: params.guestCount,
 
@@ -1082,13 +1097,13 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       // v7: Control Tower
       supplierAssignments: [], supplierQuotes: [], approvalRequests: [], budgetLines: [], activityLog: [],
       // v8: Finance / Currency / VAT
-      currency: countryConfig.currencyIso,
+      currency: params.currency || countryConfig.currencyIso,
       vatRate: countryConfig.vatRate,
       vatName: countryConfig.vatName,
       defaultPricesIncludeVat: countryConfig.defaultPricesIncludeVat,
       // v12: Billing separation
       billingCountry: params.country || 'ZA',
-      billingCurrency: countryConfig.currencyIso,
+      billingCurrency: params.currency || countryConfig.currencyIso,
       vatEnabled: countryConfig.vatRate > 0,
       showPricing: true,
       // v13: Contingency & Backup Plans
@@ -1128,6 +1143,39 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         return { ...item, quantity: newQty, flagged: newQty !== item.quantity };
       });
       return { ...e, guestCount: newCount, lineItems: updatedItems, updatedAt: new Date().toISOString() };
+    }));
+  }, [events, persistEvents]);
+
+  // v14: updates setup/strike lead time and keeps the auto-managed "Load-In / Setup" and
+  // "Load-Out / Strike" moments in sync with the computed occupied-range dates — created
+  // when their day count goes above 0, moved when dates/day-counts change, removed when
+  // set back to 0.
+  const updateVenueScheduling = useCallback((eventId: string, updates: { setupDays?: number; strikeDays?: number }) => {
+    persistEvents(events.map(e => {
+      if (e.id !== eventId) return e;
+      const setupDays = updates.setupDays ?? e.setupDays;
+      const strikeDays = updates.strikeDays ?? e.strikeDays;
+      const range = getVenueOccupiedRange({ ...e, setupDays, strikeDays });
+
+      let moments = e.moments;
+      const syncMoment = (type: 'load_in' | 'load_out', days: number, name: string, date: string, sortOrder: number) => {
+        const existing = moments.find(m => m.momentType === type);
+        if (days > 0) {
+          moments = existing
+            ? moments.map(m => m.id === existing.id ? { ...m, date } : m)
+            : [...moments, {
+                id: `mom-${crypto.randomUUID()}`, name, momentType: type,
+                date, startTime: '', endTime: '', venueSpaceId: '', backupVenueSpaceId: '',
+                notes: '', programId: '', parentMomentId: '', sortOrder,
+              }];
+        } else if (existing) {
+          moments = moments.filter(m => m.id !== existing.id);
+        }
+      };
+      syncMoment('load_in', setupDays, 'Load-In / Setup', range.start, -10);
+      syncMoment('load_out', strikeDays, 'Load-Out / Strike', range.end, 9999);
+
+      return { ...e, setupDays, strikeDays, moments, updatedAt: new Date().toISOString() };
     }));
   }, [events, persistEvents]);
 
@@ -1672,7 +1720,7 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     <EventContext.Provider value={{
       events, selectedEventId, selectedEvent,
       createEvent, updateEvent, deleteEvent, selectEvent,
-      updateGuestCount, convertEventCurrency, updateLineItem, addLineItem, removeLineItem,
+      updateGuestCount, convertEventCurrency, updateVenueScheduling, updateLineItem, addLineItem, removeLineItem,
       calculateLineItem, calculateSummary, getCalculatedItems,
       saveVersion, restoreVersion, duplicateEvent, addRFQMessage,
       addVenueSpace, updateVenueSpace, removeVenueSpace,

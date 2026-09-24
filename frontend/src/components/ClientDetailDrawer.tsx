@@ -31,6 +31,11 @@ const ClientDetailDrawer: React.FC<ClientDetailDrawerProps> = ({ client, open, o
   const [activeTab, setActiveTab] = useState<'profile' | 'history' | 'suppliers' | 'moodboards'>('profile');
   const [isEditing, setIsEditing] = useState(false);
   const [editNotes, setEditNotes] = useState('');
+  const [editCompanyName, setEditCompanyName] = useState('');
+  const [editVatNumber, setEditVatNumber] = useState('');
+  const [editRegistrationNumber, setEditRegistrationNumber] = useState('');
+  const [editBillingAddress, setEditBillingAddress] = useState('');
+  const [editApEmail, setEditApEmail] = useState('');
   const [savingNotes, setSavingNotes] = useState(false);
   const drawerRef = useRef<HTMLDivElement>(null);
 
@@ -38,10 +43,19 @@ const ClientDetailDrawer: React.FC<ClientDetailDrawerProps> = ({ client, open, o
     if (client && open) {
       setActiveTab('profile');
       setIsEditing(false);
-      setEditNotes(client.notes || '');
+      resetEditFields(client);
       loadEvents();
     }
   }, [client, open]);
+
+  const resetEditFields = (c: DbClient) => {
+    setEditNotes(c.notes || '');
+    setEditCompanyName(c.company_name || '');
+    setEditVatNumber(c.vat_number || '');
+    setEditRegistrationNumber(c.registration_number || '');
+    setEditBillingAddress(c.billing_address || '');
+    setEditApEmail(c.accounts_payable_email || '');
+  };
 
   const loadEvents = async () => {
     if (!client) return;
@@ -60,12 +74,20 @@ const ClientDetailDrawer: React.FC<ClientDetailDrawerProps> = ({ client, open, o
     if (!client) return;
     setSavingNotes(true);
     try {
-      await updateClient(client.id, { notes: editNotes });
-      toast({ title: 'Notes Saved', description: 'Client notes have been updated.' });
+      const updates: Partial<DbClient> = { notes: editNotes };
+      if (client.client_type === 'corporate') {
+        updates.company_name = editCompanyName.trim();
+        updates.vat_number = editVatNumber.trim();
+        updates.registration_number = editRegistrationNumber.trim();
+        updates.billing_address = editBillingAddress.trim();
+        updates.accounts_payable_email = editApEmail.trim();
+      }
+      await updateClient(client.id, updates);
+      toast({ title: 'Client Updated', description: 'These details will pre-fill on every future proposal.' });
       setIsEditing(false);
       onUpdated();
     } catch (err) {
-      toast({ title: 'Error', description: 'Could not save notes.', variant: 'destructive' });
+      toast({ title: 'Error', description: 'Could not save changes.', variant: 'destructive' });
     } finally {
       setSavingNotes(false);
     }
@@ -224,6 +246,52 @@ const ClientDetailDrawer: React.FC<ClientDetailDrawerProps> = ({ client, open, o
                 </div>
               </div>
 
+              {/* Company Details (corporate only) — set once, reused on every proposal */}
+              {client.client_type === 'corporate' && (
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-xs font-medium uppercase tracking-wider text-gray-400">Company Details</h3>
+                    {!isEditing ? (
+                      <button onClick={() => { setIsEditing(true); resetEditFields(client); }} className="flex items-center gap-1 text-xs transition-colors hover:opacity-70" style={{ color: GOLD }}>
+                        <Edit3 className="w-3 h-3" /> Edit
+                      </button>
+                    ) : (
+                      <div className="flex gap-2">
+                        <button onClick={() => setIsEditing(false)} className="text-xs text-gray-400 hover:text-gray-600">Cancel</button>
+                        <button onClick={handleSaveNotes} disabled={savingNotes} className="flex items-center gap-1 text-xs font-medium" style={{ color: GOLD }}>
+                          {savingNotes ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+                          Save
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  {isEditing ? (
+                    <div className="space-y-2.5">
+                      <input value={editCompanyName} onChange={e => setEditCompanyName(e.target.value)} placeholder="Company name"
+                        className="w-full px-3 py-2 rounded-lg border text-sm focus:outline-none focus:ring-2" style={{ borderColor: 'rgba(201,162,74,0.3)' }} />
+                      <div className="grid grid-cols-2 gap-2.5">
+                        <input value={editVatNumber} onChange={e => setEditVatNumber(e.target.value)} placeholder="VAT / Tax number"
+                          className="w-full px-3 py-2 rounded-lg border text-sm focus:outline-none focus:ring-2" style={{ borderColor: 'rgba(201,162,74,0.3)' }} />
+                        <input value={editRegistrationNumber} onChange={e => setEditRegistrationNumber(e.target.value)} placeholder="Registration number"
+                          className="w-full px-3 py-2 rounded-lg border text-sm focus:outline-none focus:ring-2" style={{ borderColor: 'rgba(201,162,74,0.3)' }} />
+                      </div>
+                      <input value={editBillingAddress} onChange={e => setEditBillingAddress(e.target.value)} placeholder="Billing address"
+                        className="w-full px-3 py-2 rounded-lg border text-sm focus:outline-none focus:ring-2" style={{ borderColor: 'rgba(201,162,74,0.3)' }} />
+                      <input value={editApEmail} onChange={e => setEditApEmail(e.target.value)} type="email" placeholder="Accounts payable email"
+                        className="w-full px-3 py-2 rounded-lg border text-sm focus:outline-none focus:ring-2" style={{ borderColor: 'rgba(201,162,74,0.3)' }} />
+                      <p className="text-[10px] text-gray-400">These pre-fill automatically on every new proposal for this client — no need to re-enter them.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5 text-sm text-gray-600">
+                      <div><span className="text-gray-400">VAT / Tax Number: </span>{client.vat_number || '—'}</div>
+                      <div><span className="text-gray-400">Registration Number: </span>{client.registration_number || '—'}</div>
+                      <div><span className="text-gray-400">Billing Address: </span>{client.billing_address || '—'}</div>
+                      <div><span className="text-gray-400">Accounts Payable Email: </span>{client.accounts_payable_email || '—'}</div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Style Preferences */}
               {styles.length > 0 && (
                 <div>
@@ -261,18 +329,20 @@ const ClientDetailDrawer: React.FC<ClientDetailDrawerProps> = ({ client, open, o
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="text-xs font-medium uppercase tracking-wider text-gray-400">Notes</h3>
-                  {!isEditing ? (
-                    <button onClick={() => { setIsEditing(true); setEditNotes(client.notes || ''); }} className="flex items-center gap-1 text-xs transition-colors hover:opacity-70" style={{ color: GOLD }}>
-                      <Edit3 className="w-3 h-3" /> Edit
-                    </button>
-                  ) : (
-                    <div className="flex gap-2">
-                      <button onClick={() => setIsEditing(false)} className="text-xs text-gray-400 hover:text-gray-600">Cancel</button>
-                      <button onClick={handleSaveNotes} disabled={savingNotes} className="flex items-center gap-1 text-xs font-medium" style={{ color: GOLD }}>
-                        {savingNotes ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
-                        Save
+                  {client.client_type !== 'corporate' && (
+                    !isEditing ? (
+                      <button onClick={() => { setIsEditing(true); resetEditFields(client); }} className="flex items-center gap-1 text-xs transition-colors hover:opacity-70" style={{ color: GOLD }}>
+                        <Edit3 className="w-3 h-3" /> Edit
                       </button>
-                    </div>
+                    ) : (
+                      <div className="flex gap-2">
+                        <button onClick={() => setIsEditing(false)} className="text-xs text-gray-400 hover:text-gray-600">Cancel</button>
+                        <button onClick={handleSaveNotes} disabled={savingNotes} className="flex items-center gap-1 text-xs font-medium" style={{ color: GOLD }}>
+                          {savingNotes ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+                          Save
+                        </button>
+                      </div>
+                    )
                   )}
                 </div>
                 {isEditing ? (

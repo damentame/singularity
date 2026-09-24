@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Calendar, MapPin, Users, Building2, ChevronDown, ChevronUp, Globe, Phone, ShieldAlert } from 'lucide-react';
+import { Calendar, MapPin, Users, Building2, ChevronDown, ChevronUp, Globe, Phone, ShieldAlert, AlertTriangle, Truck } from 'lucide-react';
 
 import {
   useEventContext,
@@ -11,9 +11,11 @@ import {
   WeddingClient,
   CelebrationClient,
   getDefaultClientDetails,
+  getEventDisplayName,
 } from '@/contexts/EventContext';
 import { COUNTRIES, POPULAR_COUNTRIES, getDialCodeByCountry } from '@/data/countries';
 import { useConfigOptions } from '@/hooks/useConfigOptions';
+import { getVenueOccupiedRange, findVenueConflicts } from '@/data/venueScheduling';
 import FastQuantityInput from './FastQuantityInput';
 import CurrencySwitcher from './CurrencySwitcher';
 
@@ -154,7 +156,7 @@ interface EventDetailsCardProps {
 }
 
 const EventDetailsCard: React.FC<EventDetailsCardProps> = ({ event }) => {
-  const { updateEvent, updateGuestCount } = useEventContext();
+  const { events, updateEvent, updateGuestCount, updateVenueScheduling } = useEventContext();
 
   const [showClientDetails, setShowClientDetails] = useState(true);
 
@@ -164,6 +166,10 @@ const EventDetailsCard: React.FC<EventDetailsCardProps> = ({ event }) => {
 
   const flaggedCount = event.lineItems.filter((i) => i.flagged).length;
   const isCorporate = event.eventType === 'corporate';
+
+  const venueRange = useMemo(() => getVenueOccupiedRange(event), [event.date, event.endDate, event.setupDays, event.strikeDays]);
+  const venueConflicts = useMemo(() => findVenueConflicts(event, events), [event, events]);
+  const formatVenueDate = (d: string) => d ? new Date(d + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
 
   // Auto-populate phone country code when country changes
   const handleCountryChange = (countryCode: string) => {
@@ -418,11 +424,56 @@ const EventDetailsCard: React.FC<EventDetailsCardProps> = ({ event }) => {
           <FieldLabel><Calendar className="w-3 h-3 inline mr-1" style={{ color: GOLD }} />End Date</FieldLabel>
           <TextInput value={event.endDate || ''} onChange={(v) => updateEvent(event.id, { endDate: v })} type="date" />
         </div>
+        <div>
+          <FieldLabel><Truck className="w-3 h-3 inline mr-1" style={{ color: GOLD }} />Setup Lead Time (days)</FieldLabel>
+          <TextInput
+            value={String(event.setupDays ?? 0)}
+            onChange={(v) => updateVenueScheduling(event.id, { setupDays: Math.max(0, parseInt(v, 10) || 0) })}
+            type="number"
+          />
+        </div>
+        <div>
+          <FieldLabel><Truck className="w-3 h-3 inline mr-1" style={{ color: GOLD }} />Strike / Breakdown (days)</FieldLabel>
+          <TextInput
+            value={String(event.strikeDays ?? 0)}
+            onChange={(v) => updateVenueScheduling(event.id, { strikeDays: Math.max(0, parseInt(v, 10) || 0) })}
+            type="number"
+          />
+        </div>
         <div className="sm:col-span-2">
           <FieldLabel><Users className="w-3 h-3 inline mr-1" style={{ color: GOLD }} />Guest Count</FieldLabel>
           <FastQuantityInput value={event.guestCount} onChange={(v) => updateGuestCount(event.id, v)} min={1} max={2000} presets={[50, 80, 100, 120, 150, 200, 250]} />
         </div>
       </div>
+
+      {(event.setupDays > 0 || event.strikeDays > 0 || venueConflicts.length > 0) && (
+        <div className="mt-4 space-y-2">
+          {(event.setupDays > 0 || event.strikeDays > 0) && (
+            <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg" style={{ backgroundColor: 'rgba(201,162,74,0.06)' }}>
+              <Truck className="w-3.5 h-3.5 flex-shrink-0" style={{ color: GOLD }} />
+              <p className="text-xs" style={{ color: '#1A1A1A' }}>
+                Venue needed <strong>{formatVenueDate(venueRange.start)} → {formatVenueDate(venueRange.end)}</strong>
+                <span className="text-gray-400"> ({event.setupDays > 0 ? `${event.setupDays}d setup` : ''}{event.setupDays > 0 && event.strikeDays > 0 ? ' + ' : ''}{event.strikeDays > 0 ? `${event.strikeDays}d strike` : ''})</span>
+              </p>
+            </div>
+          )}
+          {venueConflicts.length > 0 && (
+            <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-red-50 border border-red-200">
+              <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5 text-red-500" />
+              <p className="text-xs text-red-600 leading-relaxed">
+                Venue clash: <strong>{event.venue}</strong> is also held for{' '}
+                {venueConflicts.map((c, i) => (
+                  <span key={c.id}>
+                    {i > 0 && ', '}
+                    "{getEventDisplayName(c)}" ({formatVenueDate(getVenueOccupiedRange(c).start)} → {formatVenueDate(getVenueOccupiedRange(c).end)})
+                  </span>
+                ))}
+                . Double-check before confirming this booking.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ═══ CORPORATE NAMING ═══ */}
       {isCorporate && (
@@ -497,7 +548,9 @@ const EventDetailsCard: React.FC<EventDetailsCardProps> = ({ event }) => {
         <div>
           <FieldLabel>Venue Type</FieldLabel>
           <div className="relative">
-            <select value={event.venueType || ''} onChange={(e) => updateEvent(event.id, { venueType: e.target.value as VenueType })}
+            <select
+              value={event.venueType || ''}
+              onChange={(e) => updateEvent(event.id, { venueType: e.target.value as VenueType, ...(e.target.value !== 'other' ? { venueTypeOther: '' } : {}) })}
               className="w-full px-3 py-2 rounded-lg border text-sm outline-none transition-colors appearance-none bg-white pr-8"
               style={{ borderColor: '#EFEFEF', color: event.venueType ? '#1A1A1A' : '#999' }}>
               <option value="">Select type...</option>
@@ -507,6 +560,19 @@ const EventDetailsCard: React.FC<EventDetailsCardProps> = ({ event }) => {
             </select>
             <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
           </div>
+          {event.venueType === 'other' && (
+            <input
+              type="text"
+              value={event.venueTypeOther || ''}
+              onChange={(e) => updateEvent(event.id, { venueTypeOther: e.target.value })}
+              placeholder="e.g. Convention Centre"
+              className="w-full mt-1.5 px-3 py-2 rounded-lg border text-sm outline-none transition-colors"
+              style={{ borderColor: '#EFEFEF', color: '#1A1A1A' }}
+              onFocus={(e) => (e.target.style.borderColor = GOLD)}
+              onBlur={(e) => (e.target.style.borderColor = '#EFEFEF')}
+              autoFocus
+            />
+          )}
         </div>
       </div>
 

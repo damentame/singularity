@@ -34,6 +34,8 @@ const MOMENT_COLORS: Record<string, string> = {
   dinner: '#059669',
   after_party: '#EC4899',
   breakfast: '#F59E0B',
+  load_in: '#64748B',
+  load_out: '#64748B',
   other: '#6B7280',
 };
 
@@ -438,7 +440,7 @@ const ProposalView: React.FC<ProposalViewProps> = ({ event, onBack }) => {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 pt-3 border-t" style={{ borderColor: 'rgba(201,162,74,0.08)' }}>
               {[
                 ['Type', EVENT_TYPE_LABELS[event.eventType] || 'Wedding'],
-                ['Venue Type', event.venueType ? VENUE_TYPE_LABELS[event.venueType] || '' : ''],
+                ['Venue Type', event.venueType === 'other' ? (event.venueTypeOther || 'Other') : (event.venueType ? VENUE_TYPE_LABELS[event.venueType] || '' : '')],
                 ['Job Code', event.jobCode || ''],
                 ['Version', `v${event.currentVersion}`],
               ].filter(([, val]) => val).map(([label, val]) => (

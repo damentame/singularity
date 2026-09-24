@@ -4,14 +4,19 @@ import {
   Search, UserPlus, Check, Phone, Mail, User, Briefcase, BookTemplate, Loader2, Layers, FileText, Trash2,
   FilePlus,
 } from 'lucide-react';
-import { EventType, EVENT_TYPE_LABELS, CreateEventParams, ClientType } from '@/contexts/EventContext';
+import {
+  EventType, EVENT_TYPE_LABELS, CreateEventParams, ClientType, ClientDetails,
+  CorporateClient, WeddingClient, CelebrationClient,
+} from '@/contexts/EventContext';
 import { useAppContext } from '@/contexts/AppContext';
 import { COUNTRIES, POPULAR_COUNTRIES, getCountryByCode } from '@/data/countries';
+import { getCountryConfigOrDefault, CURRENCY_OPTIONS } from '@/data/countryConfig';
 import {
   DbClient,
   fetchClients,
   createClient,
   getDbClientDisplayName,
+  addClientDivision,
 } from '@/data/clientDbStore';
 import FastQuantityInput from './FastQuantityInput';
 import { toast } from '@/components/ui/use-toast';
@@ -76,12 +81,17 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({ open, onClose, onCr
   const [country, setCountry] = useState('ZA');
   const [region, setRegion] = useState('');
   const [city, setCity] = useState('');
+  const [currency, setCurrency] = useState('ZAR');
+  const [currencyTouched, setCurrencyTouched] = useState(false);
   const [guestCount, setGuestCount] = useState(100);
   // Corporate naming
   const [companyName, setCompanyName] = useState('');
   const [divisionName, setDivisionName] = useState('');
   const [eventTitle, setEventTitle] = useState('');
   const [startingPoint, setStartingPoint] = useState<'blank' | 'catalog'>('blank');
+  // Client company-level details (VAT/registration/billing/contact), pre-filled from the
+  // client record — carried through silently, editable afterward on the event itself.
+  const [clientDetails, setClientDetails] = useState<ClientDetails | null>(null);
 
   const searchRef = useRef<HTMLDivElement>(null);
 
@@ -120,6 +130,11 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({ open, onClose, onCr
     [allAccounts, selectedAccountId]
   );
 
+  // Currency follows the selected country by default, until the coordinator picks one explicitly
+  useEffect(() => {
+    if (!currencyTouched) setCurrency(getCountryConfigOrDefault(country).currencyIso);
+  }, [country, currencyTouched]);
+
   const sortedCountries = useMemo(() => {
     const popular = POPULAR_COUNTRIES.map(code => COUNTRIES.find(c => c.code === code)).filter(Boolean);
     const rest = COUNTRIES.filter(c => !POPULAR_COUNTRIES.includes(c.code));
@@ -147,11 +162,14 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({ open, onClose, onCr
       setCountry('ZA');
       setRegion('');
       setCity('');
+      setCurrency('ZAR');
+      setCurrencyTouched(false);
       setGuestCount(100);
       setCompanyName('');
       setDivisionName('');
       setEventTitle('');
       setStartingPoint('blank');
+      setClientDetails(null);
     }
   }, [open]);
 
@@ -172,11 +190,54 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({ open, onClose, onCr
 
   const isCorporate = eventType === 'corporate';
 
+  // ─── Map a client record onto the ClientDetails shape a proposal needs ─────
+  // Snapshot at creation time — not a live link — so later edits to the client
+  // record don't retroactively rewrite an already-created proposal.
+  function buildClientDetailsFromAccount(account: DbClient, type: EventType): ClientDetails {
+    if (type === 'corporate') {
+      const [contactFirstName, ...rest] = (account.primary_contact_name || '').split(' ');
+      const details: CorporateClient = {
+        companyName: account.company_name || '',
+        vatNumber: account.vat_number || '',
+        registrationNumber: account.registration_number || '',
+        billingAddress: account.billing_address || '',
+        contactFirstName: contactFirstName || '',
+        contactSurname: rest.join(' '),
+        contactEmail: account.primary_contact_email || '',
+        contactTelephoneCode: account.primary_contact_phone_code || '+27',
+        contactTelephone: account.primary_contact_phone || '',
+        accountsPayableEmail: account.accounts_payable_email || '',
+      };
+      return details;
+    }
+    if (type === 'wedding') {
+      const details: WeddingClient = {
+        partner1FirstName: '', partner1Surname: '', partner2FirstName: '', partner2Surname: '',
+        primaryEmail: account.primary_contact_email || '',
+        primaryTelephoneCode: account.primary_contact_phone_code || '+27',
+        primaryTelephone: account.primary_contact_phone || '',
+        billingName: account.primary_contact_name || '',
+        billingAddress: account.billing_address || '',
+      };
+      return details;
+    }
+    const details: CelebrationClient = {
+      hostFirstName: '', hostSurname: '',
+      hostEmail: account.primary_contact_email || '',
+      hostTelephoneCode: account.primary_contact_phone_code || '+27',
+      hostTelephone: account.primary_contact_phone || '',
+      billingName: account.primary_contact_name || '',
+      billingAddress: account.billing_address || '',
+    };
+    return details;
+  }
+
   // ─── Pre-fill Step 2 fields from a resolved client account ─────────────────
   function applyAccountPrefill(account: DbClient) {
     if (account.country) setCountry(account.country);
     if (account.client_type === 'corporate' && account.company_name) setCompanyName(account.company_name);
     if (account.client_type !== 'corporate' && account.primary_contact_name) setEventName(prev => prev || account.primary_contact_name);
+    setClientDetails(buildClientDetailsFromAccount(account, eventType));
   }
 
   // ─── Step 1 validation ─────────────────────────────────────────────────────
@@ -211,6 +272,9 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({ open, onClose, onCr
           city: '',
           billing_address: '',
           vat_number: '',
+          registration_number: '',
+          accounts_payable_email: '',
+          divisions: [],
           style_preferences: {},
           budget_history: [],
           notes: '',
@@ -242,6 +306,11 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({ open, onClose, onCr
       ? (eventTitle.trim() || companyName.trim() || 'Untitled Event')
       : (eventName.trim() || 'Untitled Event');
 
+    // Remember a newly-used division against the client so it's suggested next time
+    if (isCorporate && selectedAccount && divisionName.trim()) {
+      addClientDivision(selectedAccount, divisionName.trim());
+    }
+
     onCreate({
       name: finalName,
       date,
@@ -257,6 +326,8 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({ open, onClose, onCr
       eventTitle: isCorporate ? eventTitle.trim() : undefined,
       clientAccountId: selectedAccountId,
       useStandardCatalog: startingPoint === 'catalog',
+      clientDetails: clientDetails || undefined,
+      currency,
     });
   };
 
@@ -829,6 +900,11 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({ open, onClose, onCr
                   Corporate Structure
                 </label>
                 <p className="text-[10px] text-gray-400 mb-3">Display: Company - Division - Event Title</p>
+                {selectedAccount && (selectedAccount.vat_number || selectedAccount.registration_number || selectedAccount.billing_address) && (
+                  <p className="text-[10px] mb-3 flex items-center gap-1" style={{ color: GOLD }}>
+                    <Check className="w-3 h-3" /> VAT, registration &amp; billing details already on file for this client — no need to re-enter them.
+                  </p>
+                )}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
                     <label className="block text-[10px] uppercase tracking-widest text-gray-400 mb-1">
@@ -848,12 +924,18 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({ open, onClose, onCr
                     <label className="block text-[10px] uppercase tracking-widest text-gray-400 mb-1">Division</label>
                     <input
                       type="text"
+                      list="division-suggestions"
                       value={divisionName}
                       onChange={(e) => setDivisionName(e.target.value)}
                       placeholder="Marketing"
                       className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
                       style={{ borderColor: '#E5E5E5', color: '#1A1A1A' }}
                     />
+                    {selectedAccount && (selectedAccount.divisions || []).length > 0 && (
+                      <datalist id="division-suggestions">
+                        {(selectedAccount.divisions || []).map((d) => <option key={d} value={d} />)}
+                      </datalist>
+                    )}
                   </div>
                   <div>
                     <label className="block text-[10px] uppercase tracking-widest text-gray-400 mb-1">
@@ -920,7 +1002,7 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({ open, onClose, onCr
               <label className="block text-[10px] uppercase tracking-[0.15em] mb-3" style={{ color: GOLD, fontWeight: 600 }}>
                 Location
               </label>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                 <div>
                   <label className="block text-xs uppercase tracking-widest text-gray-400 mb-1.5">Country</label>
                   <div className="relative">
@@ -970,6 +1052,22 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({ open, onClose, onCr
                     onFocus={inputFocus}
                     onBlur={inputBlur}
                   />
+                </div>
+                <div>
+                  <label className="block text-xs uppercase tracking-widest text-gray-400 mb-1.5">Currency</label>
+                  <div className="relative">
+                    <select
+                      value={currency}
+                      onChange={(e) => { setCurrency(e.target.value); setCurrencyTouched(true); }}
+                      className="w-full px-3 py-2.5 rounded-lg border text-sm outline-none transition-colors appearance-none bg-white pr-8"
+                      style={{ borderColor: '#E5E5E5', color: '#1A1A1A' }}
+                    >
+                      {CURRENCY_OPTIONS.map((c) => (
+                        <option key={c.iso} value={c.iso}>{c.label}</option>
+                      ))}
+                    </select>
+                    <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+                  </div>
                 </div>
               </div>
             </div>

@@ -38,6 +38,8 @@ const MOMENT_COLORS: Record<string, string> = {
   dinner: '#059669',
   after_party: '#EC4899',
   breakfast: '#F59E0B',
+  load_in: '#64748B',
+  load_out: '#64748B',
   other: '#6B7280',
 };
 
@@ -75,6 +77,8 @@ const inferMomentType = (name: string): MomentType => {
   if (n.includes('dinner') || n.includes('main event')) return 'dinner';
   if (n.includes('after')) return 'after_party';
   if (n.includes('breakfast')) return 'breakfast';
+  if (n.includes('load-in') || n.includes('load in') || n.includes('setup') || n.includes('set-up')) return 'load_in';
+  if (n.includes('load-out') || n.includes('load out') || n.includes('strike') || n.includes('breakdown') || n.includes('teardown')) return 'load_out';
   return 'other';
 };
 

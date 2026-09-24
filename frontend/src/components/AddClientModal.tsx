@@ -38,6 +38,10 @@ const AddClientModal: React.FC<AddClientModalProps> = ({ open, onClose, onCreate
   const [phoneCode, setPhoneCode] = useState('+27');
   const [phone, setPhone] = useState('');
   const [companyName, setCompanyName] = useState('');
+  const [vatNumber, setVatNumber] = useState('');
+  const [registrationNumber, setRegistrationNumber] = useState('');
+  const [billingAddress, setBillingAddress] = useState('');
+  const [apEmail, setApEmail] = useState('');
   const [country, setCountry] = useState('ZA');
   const [city, setCity] = useState('');
   const [notes, setNotes] = useState('');
@@ -56,6 +60,10 @@ const AddClientModal: React.FC<AddClientModalProps> = ({ open, onClose, onCreate
       setPhoneCode('+27');
       setPhone('');
       setCompanyName('');
+      setVatNumber('');
+      setRegistrationNumber('');
+      setBillingAddress('');
+      setApEmail('');
       setCountry('ZA');
       setCity('');
       setNotes('');
@@ -114,8 +122,11 @@ const AddClientModal: React.FC<AddClientModalProps> = ({ open, onClose, onCreate
         country,
         region: '',
         city: city.trim(),
-        billing_address: '',
-        vat_number: '',
+        billing_address: clientType === 'corporate' ? billingAddress.trim() : '',
+        vat_number: clientType === 'corporate' ? vatNumber.trim() : '',
+        registration_number: clientType === 'corporate' ? registrationNumber.trim() : '',
+        accounts_payable_email: clientType === 'corporate' ? apEmail.trim() : '',
+        divisions: [],
         style_preferences: { styles: selectedStyles },
         budget_history: [],
         notes: notes.trim(),
@@ -216,19 +227,70 @@ const AddClientModal: React.FC<AddClientModalProps> = ({ open, onClose, onCreate
 
               {/* Company (corporate) */}
               {clientType === 'corporate' && (
-                <div>
-                  <label className="text-xs font-medium uppercase tracking-wider text-gray-500 mb-1.5 block">Company Name</label>
-                  <div className="relative">
-                    <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" />
+                <>
+                  <div>
+                    <label className="text-xs font-medium uppercase tracking-wider text-gray-500 mb-1.5 block">Company Name</label>
+                    <div className="relative">
+                      <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" />
+                      <input
+                        value={companyName}
+                        onChange={e => setCompanyName(e.target.value)}
+                        placeholder="Company name"
+                        className="w-full pl-10 pr-4 py-2.5 rounded-xl border text-sm focus:outline-none focus:ring-2 transition-all"
+                        style={{ borderColor: 'rgba(0,0,0,0.08)' }}
+                      />
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-gray-400 -mt-1">
+                    Set these once here — every future proposal for this client will pre-fill from them.
+                  </p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs font-medium uppercase tracking-wider text-gray-500 mb-1.5 block">VAT / Tax Number</label>
+                      <input
+                        value={vatNumber}
+                        onChange={e => setVatNumber(e.target.value)}
+                        placeholder="VAT number"
+                        className="w-full px-3 py-2.5 rounded-xl border text-sm focus:outline-none focus:ring-2 transition-all"
+                        style={{ borderColor: 'rgba(0,0,0,0.08)' }}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium uppercase tracking-wider text-gray-500 mb-1.5 block">Registration Number</label>
+                      <input
+                        value={registrationNumber}
+                        onChange={e => setRegistrationNumber(e.target.value)}
+                        placeholder="Reg number"
+                        className="w-full px-3 py-2.5 rounded-xl border text-sm focus:outline-none focus:ring-2 transition-all"
+                        style={{ borderColor: 'rgba(0,0,0,0.08)' }}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium uppercase tracking-wider text-gray-500 mb-1.5 block">Billing Address</label>
                     <input
-                      value={companyName}
-                      onChange={e => setCompanyName(e.target.value)}
-                      placeholder="Company name"
-                      className="w-full pl-10 pr-4 py-2.5 rounded-xl border text-sm focus:outline-none focus:ring-2 transition-all"
+                      value={billingAddress}
+                      onChange={e => setBillingAddress(e.target.value)}
+                      placeholder="Billing address"
+                      className="w-full px-3 py-2.5 rounded-xl border text-sm focus:outline-none focus:ring-2 transition-all"
                       style={{ borderColor: 'rgba(0,0,0,0.08)' }}
                     />
                   </div>
-                </div>
+                  <div>
+                    <label className="text-xs font-medium uppercase tracking-wider text-gray-500 mb-1.5 block">Accounts Payable Email</label>
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" />
+                      <input
+                        value={apEmail}
+                        onChange={e => setApEmail(e.target.value)}
+                        type="email"
+                        placeholder="accounts@company.com"
+                        className="w-full pl-10 pr-4 py-2.5 rounded-xl border text-sm focus:outline-none focus:ring-2 transition-all"
+                        style={{ borderColor: 'rgba(0,0,0,0.08)' }}
+                      />
+                    </div>
+                  </div>
+                </>
               )}
 
               {/* Email */}

@@ -15,6 +15,9 @@ export interface DbClient {
   city: string;
   billing_address: string;
   vat_number: string;
+  registration_number: string;
+  accounts_payable_email: string;
+  divisions: string[];
   style_preferences: Record<string, any>;
   budget_history: Array<{ date: string; amount: number; eventName: string }>;
   notes: string;
@@ -133,6 +136,16 @@ export const updateClient = async (id: string, updates: Partial<DbClient>): Prom
   return data as DbClient;
 };
 
+// ─── Remember a division for this client (for quick-pick reuse) ──────────────
+
+export const addClientDivision = async (client: DbClient, division: string): Promise<void> => {
+  const trimmed = division.trim();
+  if (!trimmed) return;
+  const existing = client.divisions || [];
+  if (existing.some(d => d.toLowerCase() === trimmed.toLowerCase())) return;
+  await updateClient(client.id, { divisions: [...existing, trimmed] });
+};
+
 // ─── Soft delete client ──────────────────────────────────────────────────────
 
 export const deactivateClient = async (id: string): Promise<boolean> => {
@@ -245,6 +258,9 @@ export const migrateLocalClientsToDb = async (coordinatorId: string): Promise<nu
           city: lc.city || '',
           billing_address: lc.billingAddress || '',
           vat_number: lc.vatNumber || '',
+          registration_number: '',
+          accounts_payable_email: '',
+          divisions: [],
           style_preferences: {},
           budget_history: [],
           notes: '',

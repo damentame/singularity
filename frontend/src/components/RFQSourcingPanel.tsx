@@ -1,7 +1,7 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Send, Plus, ExternalLink, Copy, CheckCircle2, X, ChevronDown, ChevronRight,
-  Package, Clock, AlertCircle, Lock, XCircle, FileText
+  Package, Clock, AlertCircle, Lock, XCircle, FileText, MessageCircle,
 } from 'lucide-react';
 import {
   useEventContext, PlannerEvent, CATEGORY_LABELS, ItemCategory,
@@ -17,14 +17,17 @@ import { getCurrencySymbol, formatCurrency } from '@/data/countryConfig';
 import { toast } from '@/components/ui/use-toast';
 import { useAppContext } from '@/contexts/AppContext';
 import { syncRFQBatch, syncBatchStatus } from '@/lib/rfqSupabaseSync';
+import { getUnreadCountsByBatch } from '@/lib/rfqMessagesApi';
+import RFQMessageThread from './RFQMessageThread';
 
 const GOLD = '#C9A24A';
 
 interface RFQSourcingPanelProps {
   event: PlannerEvent;
+  autoOpenBatchId?: string;
 }
 
-const RFQSourcingPanel: React.FC<RFQSourcingPanelProps> = ({ event }) => {
+const RFQSourcingPanel: React.FC<RFQSourcingPanelProps> = ({ event, autoOpenBatchId }) => {
   const { updateEvent } = useEventContext();
   const { user } = useAppContext();
   const [showCreate, setShowCreate] = useState(false);
@@ -34,11 +37,29 @@ const RFQSourcingPanel: React.FC<RFQSourcingPanelProps> = ({ event }) => {
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [expandedBatch, setExpandedBatch] = useState<string | null>(null);
   const [showEmailModal, setShowEmailModal] = useState<string | null>(null);
+  const [messageThreadBatch, setMessageThreadBatch] = useState<RFQBatch | null>(null);
+  const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
   const [refreshKey, setRefreshKey] = useState(0);
 
   const batches = useMemo(() => getBatchesForEvent(event.id), [event.id, refreshKey]);
   const currSym = getCurrencySymbol(event.currency || 'ZAR');
   const fmt = (n: number) => formatCurrency(n, currSym);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    getUnreadCountsByBatch(user.id).then(setUnreadCounts);
+  }, [user?.id, refreshKey]);
+
+  // Only reacts to autoOpenBatchId itself (not `batches`, which gets a new
+  // identity on every refresh) so closing the thread doesn't immediately
+  // reopen it via the refreshKey bump in its onClose handler.
+  useEffect(() => {
+    if (!autoOpenBatchId) return;
+    setExpandedBatch(autoOpenBatchId);
+    const batch = getBatchesForEvent(event.id).find(b => b.id === autoOpenBatchId);
+    if (batch) setMessageThreadBatch(batch);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoOpenBatchId]);
 
   const availableItems = event.lineItems.filter(li => !isLineItemInActiveBatch(li.id));
 
@@ -237,6 +258,14 @@ const RFQSourcingPanel: React.FC<RFQSourcingPanelProps> = ({ event }) => {
                       <button onClick={() => window.open(getPortalUrl(batch.portalToken), '_blank')} className="flex items-center gap-1 px-3 py-1.5 text-[10px] font-medium rounded-lg border" style={{ borderColor: 'rgba(201,162,74,0.3)', color: GOLD }}>
                         <ExternalLink className="w-3 h-3" /> Open Portal
                       </button>
+                      <button onClick={() => setMessageThreadBatch(batch)} className="relative flex items-center gap-1 px-3 py-1.5 text-[10px] font-medium rounded-lg border" style={{ borderColor: 'rgba(201,162,74,0.3)', color: GOLD }}>
+                        <MessageCircle className="w-3 h-3" /> Messages
+                        {unreadCounts[batch.id] > 0 && (
+                          <span className="ml-0.5 flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full text-white text-[9px] font-bold" style={{ backgroundColor: '#EF4444' }}>
+                            {unreadCounts[batch.id] > 9 ? '9+' : unreadCounts[batch.id]}
+                          </span>
+                        )}
+                      </button>
                       {(batch.status === 'QUOTED' || batch.status === 'REVISED') && latestSubmitted && (
                         <button onClick={() => handleAccept(batch.id)} className="flex items-center gap-1 px-3 py-1.5 text-[10px] font-medium text-white rounded-lg" style={{ backgroundColor: '#22C55E' }}>
                           <CheckCircle2 className="w-3 h-3" /> Accept v{latestSubmitted.versionNumber}
@@ -343,6 +372,17 @@ const RFQSourcingPanel: React.FC<RFQSourcingPanelProps> = ({ event }) => {
           </div>
         );
       })()}
+
+      {/* Message Thread */}
+      {messageThreadBatch && (
+        <RFQMessageThread
+          mode="coordinator"
+          batchId={messageThreadBatch.id}
+          supplierName={messageThreadBatch.supplierName}
+          senderName={user?.name || 'Coordinator'}
+          onClose={() => { setMessageThreadBatch(null); setRefreshKey(k => k + 1); }}
+        />
+      )}
     </div>
   );
 };

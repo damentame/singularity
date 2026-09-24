@@ -19,6 +19,7 @@ import {
 import { getCountryByCode } from '@/data/countries';
 import { getCurrencySymbol, CURRENCY_OPTIONS, COUNTRY_FINANCE_CONFIGS } from '@/data/countryConfig';
 import { getBatchesForEvent, getLatestSubmitted } from '@/data/rfqStore';
+import { getRecentMessagesForEvent, RecentBatchMessage } from '@/lib/rfqMessagesApi';
 import { searchAppSuppliers, AppSupplier } from '@/lib/supplierDirectory';
 
 
@@ -71,6 +72,8 @@ const EventDetail: React.FC<EventDetailProps> = ({ eventId, onBack, onGeneratePr
 
   const event = events.find((e) => e.id === eventId);
   const [activeTab, setActiveTab] = useState<OperationsTab>('sub-events');
+  const [recentMessages, setRecentMessages] = useState<RecentBatchMessage[]>([]);
+  const [messagesAutoOpenBatchId, setMessagesAutoOpenBatchId] = useState<string | undefined>(undefined);
   const [showVersions, setShowVersions] = useState(false);
   const [showRFQ, setShowRFQ] = useState(false);
   const [rfqTarget, setRfqTarget] = useState<string | null>(null);
@@ -107,6 +110,15 @@ const EventDetail: React.FC<EventDetailProps> = ({ eventId, onBack, onGeneratePr
     });
     return () => { cancelled = true; };
   }, [showRFQ, rfqTarget]);
+
+  useEffect(() => {
+    if (!event) return;
+    let cancelled = false;
+    const load = () => getRecentMessagesForEvent(event.id).then(msgs => { if (!cancelled) setRecentMessages(msgs); });
+    load();
+    const interval = setInterval(load, 15000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [event?.id]);
 
   if (!event) return null;
 
@@ -347,7 +359,12 @@ const EventDetail: React.FC<EventDetailProps> = ({ eventId, onBack, onGeneratePr
                 {activeTab === 'tasks' && <TaskManager event={event} />}
                 {activeTab === 'shopping' && <ShoppingListManager event={event} />}
                 {activeTab === 'orders' && <SalesOrderView event={event} />}
-                {activeTab === 'sourcing' && <RFQSourcingPanel event={event} />}
+                {activeTab === 'sourcing' && (
+                  <RFQSourcingPanel
+                    event={event}
+                    autoOpenBatchId={messagesAutoOpenBatchId}
+                  />
+                )}
                 {activeTab === 'compare' && <SupplierQuoteComparison event={event} />}
                 {activeTab === 'control-tower' && <ControlTowerDashboard event={event} />}
                 {activeTab === 'compliance' && <ComplianceDocumentsTab eventId={event.id} />}
@@ -357,38 +374,39 @@ const EventDetail: React.FC<EventDetailProps> = ({ eventId, onBack, onGeneratePr
             </div>
 
 
-            {/* RFQ Inbox */}
+            {/* Recent Messages */}
             <div className="bg-white rounded-2xl border p-6" style={{ borderColor: 'rgba(201,162,74,0.15)' }}>
               <div className="flex items-center justify-between mb-5">
                 <h2 className="text-[10px] font-semibold uppercase tracking-[0.15em]" style={{ color: GOLD }}>
-                  <Inbox className="w-3.5 h-3.5 inline mr-1.5" />RFQ Inbox
+                  <Inbox className="w-3.5 h-3.5 inline mr-1.5" />Recent Messages
                 </h2>
-                <span className="text-[10px] text-gray-400">{(event.rfqMessages || []).length} sent</span>
+                <span className="text-[10px] text-gray-400">{recentMessages.length} conversation{recentMessages.length !== 1 ? 's' : ''}</span>
               </div>
               <div className="h-px mb-4" style={{ backgroundColor: 'rgba(201,162,74,0.1)' }} />
 
-              {(!event.rfqMessages || event.rfqMessages.length === 0) ? (
-                <p className="text-xs text-gray-400 text-center py-6">No RFQs sent yet. Click "Hire" on any line item to assign a supplier, then review and send bundled requests.</p>
+              {recentMessages.length === 0 ? (
+                <p className="text-xs text-gray-400 text-center py-6">No supplier conversations yet. Click "Hire" on any line item to assign a supplier, then review and send bundled requests — you can message suppliers from the Sourcing tab.</p>
               ) : (
                 <div className="space-y-3 max-h-60 overflow-y-auto custom-scrollbar">
-                  {event.rfqMessages.map((msg) => {
-                    const item = event.lineItems.find((i) => i.id === msg.lineItemId);
-                    return (
-                      <div key={msg.id} className="p-3 rounded-xl border" style={{ borderColor: 'rgba(201,162,74,0.1)' }}>
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-xs font-medium" style={{ color: '#1A1A1A' }}>{msg.supplierName}</span>
-                          <span className="text-[10px] px-1.5 py-0.5 rounded-full uppercase tracking-wider"
-                            style={{
-                              backgroundColor: msg.status === 'sent' ? 'rgba(201,162,74,0.1)' : msg.status === 'replied' ? 'rgba(59,130,246,0.1)' : 'rgba(34,197,94,0.1)',
-                              color: msg.status === 'sent' ? GOLD : msg.status === 'replied' ? '#3B82F6' : '#22C55E',
-                            }}>
-                            {msg.status}
-                          </span>
-                        </div>
-                        <p className="text-[10px] text-gray-400">{item?.name} · {msg.jobCode} · {new Date(msg.sentAt).toLocaleDateString()}</p>
+                  {recentMessages.map((rm) => (
+                    <button
+                      key={rm.batchId}
+                      onClick={() => { setActiveTab('sourcing'); setMessagesAutoOpenBatchId(rm.batchId); }}
+                      className="w-full text-left p-3 rounded-xl border transition-colors hover:bg-gray-50"
+                      style={{ borderColor: 'rgba(201,162,74,0.1)' }}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="flex items-center gap-1.5 text-xs font-medium" style={{ color: '#1A1A1A' }}>
+                          {rm.unread && <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: '#EF4444' }} />}
+                          {rm.supplierName}
+                        </span>
+                        <span className="text-[10px] text-gray-400">{new Date(rm.message.createdAt).toLocaleDateString()}</span>
                       </div>
-                    );
-                  })}
+                      <p className="text-[10px] text-gray-400 truncate">
+                        {rm.message.senderType === 'coordinator' ? 'You: ' : ''}{rm.message.body}
+                      </p>
+                    </button>
+                  ))}
                 </div>
               )}
             </div>
