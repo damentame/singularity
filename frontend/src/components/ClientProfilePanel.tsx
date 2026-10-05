@@ -2,11 +2,12 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   User, Building2, Mail, Phone, MapPin, Calendar, DollarSign,
   ChevronDown, ChevronRight, Heart, PartyPopper, Palette, Users,
-  Clock, Edit3, Check, X, FileText,
+  Clock, Edit3, Check, X, FileText, Search, UserPlus, Repeat,
 } from 'lucide-react';
 import { useEventContext, PlannerEvent, getEventDisplayName, EVENT_TYPE_LABELS } from '@/contexts/EventContext';
-import { DbClient, getClientById, getDbClientDisplayName } from '@/data/clientDbStore';
+import { DbClient, getClientById, getDbClientDisplayName, fetchClients, buildClientDetailsFromAccount } from '@/data/clientDbStore';
 import { getCountryByCode } from '@/data/countries';
+import AddClientModal from './AddClientModal';
 
 const GOLD = '#C9A24A';
 const fmt = (n: number) => 'R ' + n.toLocaleString('en-ZA', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
@@ -17,7 +18,7 @@ interface ClientProfilePanelProps {
 }
 
 const ClientProfilePanel: React.FC<ClientProfilePanelProps> = ({ event, onOpenEvent }) => {
-  const { events, calculateSummary } = useEventContext();
+  const { events, updateEvent, calculateSummary } = useEventContext();
   const [expanded, setExpanded] = useState(true);
   const [editingNotes, setEditingNotes] = useState(false);
   const [notes, setNotes] = useState('');
@@ -29,6 +30,39 @@ const ClientProfilePanel: React.FC<ClientProfilePanelProps> = ({ event, onOpenEv
     getClientById(event.clientAccountId).then(c => { if (!cancelled) setClientAccount(c); });
     return () => { cancelled = true; };
   }, [event.clientAccountId]);
+
+  // ─── Change / link client ───────────────────────────────────────────────
+  const [showPicker, setShowPicker] = useState(false);
+  const [pickerQuery, setPickerQuery] = useState('');
+  const [pickerAccounts, setPickerAccounts] = useState<DbClient[]>([]);
+  const [loadingPicker, setLoadingPicker] = useState(false);
+  const [showAddClient, setShowAddClient] = useState(false);
+
+  useEffect(() => {
+    if (!showPicker) return;
+    setLoadingPicker(true);
+    fetchClients().then(setPickerAccounts).finally(() => setLoadingPicker(false));
+  }, [showPicker]);
+
+  const filteredPickerAccounts = useMemo(() => {
+    const q = pickerQuery.trim().toLowerCase();
+    const pool = pickerAccounts.filter(a => a.id !== event.clientAccountId);
+    if (!q) return pool;
+    return pool.filter(a =>
+      a.primary_contact_name.toLowerCase().includes(q) ||
+      a.primary_contact_email.toLowerCase().includes(q) ||
+      a.company_name.toLowerCase().includes(q)
+    );
+  }, [pickerAccounts, pickerQuery, event.clientAccountId]);
+
+  const linkClient = (account: DbClient) => {
+    updateEvent(event.id, {
+      clientAccountId: account.id,
+      clientDetails: buildClientDetailsFromAccount(account, event.eventType),
+    });
+    setShowPicker(false);
+    setPickerQuery('');
+  };
 
   // Find all events for this client
   const clientEvents = useMemo(() => {
@@ -59,18 +93,86 @@ const ClientProfilePanel: React.FC<ClientProfilePanelProps> = ({ event, onOpenEv
     return { totalSpend, totalEvents, suppliersUsed: Array.from(suppliersUsed), eventTypes: Array.from(eventTypes) };
   }, [previousEvents, calculateSummary]);
 
+  const clientPicker = showPicker && (
+    <div className="mt-4 mb-4" onClick={(e) => e.stopPropagation()}>
+      <div className="relative mb-2">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+        <input
+          type="text"
+          value={pickerQuery}
+          onChange={(e) => setPickerQuery(e.target.value)}
+          placeholder="Search clients by name, email, or company..."
+          className="w-full pl-9 pr-4 py-2.5 rounded-lg border text-sm outline-none"
+          style={{ borderColor: 'rgba(201,162,74,0.2)', color: '#1A1A1A' }}
+          autoFocus
+        />
+      </div>
+      <div className="max-h-52 overflow-y-auto rounded-xl border" style={{ borderColor: 'rgba(201,162,74,0.12)' }}>
+        {loadingPicker ? (
+          <div className="px-4 py-5 text-center text-xs text-gray-400">Loading clients...</div>
+        ) : filteredPickerAccounts.length === 0 ? (
+          <div className="px-4 py-5 text-center text-xs text-gray-400">No other clients found</div>
+        ) : (
+          filteredPickerAccounts.map((acct) => (
+            <button
+              key={acct.id}
+              onClick={() => linkClient(acct)}
+              className="w-full text-left px-4 py-2.5 hover:bg-gray-50 transition-colors border-b last:border-b-0 flex items-center gap-3"
+              style={{ borderColor: 'rgba(0,0,0,0.04)' }}
+            >
+              <div className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: 'rgba(201,162,74,0.1)' }}>
+                {acct.client_type === 'corporate'
+                  ? <Building2 className="w-3.5 h-3.5" style={{ color: GOLD }} />
+                  : <User className="w-3.5 h-3.5" style={{ color: GOLD }} />}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-xs font-medium text-gray-800 truncate">{getDbClientDisplayName(acct)}</div>
+                <div className="text-[10px] text-gray-400 truncate">{acct.primary_contact_email}</div>
+              </div>
+            </button>
+          ))
+        )}
+      </div>
+      <div className="flex items-center justify-between mt-2">
+        <button onClick={() => setShowAddClient(true)} className="flex items-center gap-1 text-[11px] font-medium hover:opacity-70" style={{ color: GOLD }}>
+          <UserPlus className="w-3 h-3" /> Create New Client
+        </button>
+        <button onClick={() => { setShowPicker(false); setPickerQuery(''); }} className="text-[11px] text-gray-400 hover:text-gray-600">
+          Cancel
+        </button>
+      </div>
+      {showAddClient && (
+        <AddClientModal
+          open={showAddClient}
+          onClose={() => setShowAddClient(false)}
+          onCreated={(newClient) => { linkClient(newClient); setShowAddClient(false); }}
+        />
+      )}
+    </div>
+  );
+
   if (!clientAccount) {
     return (
       <div className="bg-white rounded-2xl border p-6" style={{ borderColor: 'rgba(201,162,74,0.15)' }}>
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ backgroundColor: 'rgba(201,162,74,0.08)' }}>
-            <User className="w-5 h-5" style={{ color: GOLD }} />
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ backgroundColor: 'rgba(201,162,74,0.08)' }}>
+              <User className="w-5 h-5" style={{ color: GOLD }} />
+            </div>
+            <div>
+              <h3 className="text-[10px] font-semibold uppercase tracking-[0.12em]" style={{ color: GOLD }}>Client</h3>
+              <p className="text-xs text-gray-400">No client account linked</p>
+            </div>
           </div>
-          <div>
-            <h3 className="text-[10px] font-semibold uppercase tracking-[0.12em]" style={{ color: GOLD }}>Client</h3>
-            <p className="text-xs text-gray-400">No client account linked</p>
-          </div>
+          <button
+            onClick={() => setShowPicker(true)}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-all hover:shadow-sm flex-shrink-0"
+            style={{ backgroundColor: GOLD, color: '#FFF' }}
+          >
+            <UserPlus className="w-3.5 h-3.5" /> Link Client
+          </button>
         </div>
+        {clientPicker}
       </div>
     );
   }
@@ -81,9 +183,12 @@ const ClientProfilePanel: React.FC<ClientProfilePanelProps> = ({ event, onOpenEv
   return (
     <div className="bg-white rounded-2xl border overflow-hidden" style={{ borderColor: 'rgba(201,162,74,0.15)' }}>
       {/* Header */}
-      <button
+      <div
+        role="button"
+        tabIndex={0}
         onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center gap-4 p-5 text-left transition-colors hover:bg-gray-50/50"
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setExpanded(!expanded); }}
+        className="w-full flex items-center gap-4 p-5 text-left transition-colors hover:bg-gray-50/50 cursor-pointer"
       >
         <div className="w-11 h-11 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: 'rgba(201,162,74,0.08)' }}>
           {clientAccount.client_type === 'corporate'
@@ -129,13 +234,24 @@ const ClientProfilePanel: React.FC<ClientProfilePanelProps> = ({ event, onOpenEv
               <div className="text-[10px] text-gray-400">{fmt(stats.totalSpend)} total</div>
             </div>
           )}
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); setExpanded(true); setShowPicker(true); }}
+            onKeyDown={(e) => e.stopPropagation()}
+            title="Change which client this quote is for"
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-medium border transition-all hover:shadow-sm"
+            style={{ borderColor: 'rgba(201,162,74,0.3)', color: GOLD }}
+          >
+            <Repeat className="w-3 h-3" /> Change
+          </button>
           {expanded ? <ChevronDown className="w-4 h-4 text-gray-300" /> : <ChevronRight className="w-4 h-4 text-gray-300" />}
         </div>
-      </button>
+      </div>
 
       {/* Expanded Content */}
       {expanded && (
         <div className="border-t px-5 pb-5" style={{ borderColor: 'rgba(201,162,74,0.08)' }}>
+          {clientPicker}
           {/* Client Stats Row */}
           {isReturning && (
             <div className="grid grid-cols-3 gap-3 pt-4 pb-3">

@@ -106,6 +106,21 @@ const RFQMessageThread: React.FC<RFQMessageThreadProps> = ({
             <p className="text-xs text-gray-400 text-center py-10">No messages yet — say hello.</p>
           ) : (
             messages.map((m) => {
+              if (m.senderType === 'system') {
+                return (
+                  <div key={m.id} className="flex justify-center">
+                    <div
+                      className="max-w-[90%] rounded-full px-3.5 py-2 text-center"
+                      style={{ backgroundColor: 'rgba(201,162,74,0.08)', border: '1px solid rgba(201,162,74,0.2)' }}
+                    >
+                      <p className="text-[11px] leading-relaxed whitespace-pre-wrap" style={{ color: '#8A7238' }}>{m.body}</p>
+                      <p className="text-[9px] mt-0.5 text-gray-300">
+                        {new Date(m.createdAt).toLocaleString('en-ZA', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    </div>
+                  </div>
+                );
+              }
               const isMine = m.senderType === mode;
               return (
                 <div key={m.id} className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>

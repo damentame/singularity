@@ -7,9 +7,10 @@ import { RFQBatch, RFQBatchItem, RFQBatchStatus, PlannerEvent, SupplierQuoteVers
 import { upsertQuoteVersionFromSupabase } from '@/data/rfqStore';
 
 // Build the minimal event context that the supplier portal needs.
+// Deliberately excludes event.name / companyName / clientDetails - suppliers
+// only ever see the universal quote number, never the client's identity.
 export function buildEventContext(event: PlannerEvent): Record<string, any> {
   return {
-    name: event.name || event.companyName || '',
     currency: event.currency || 'ZAR',
     vatRate: event.vatRate ?? 0.15,
     defaultPricesIncludeVat: event.defaultPricesIncludeVat ?? true,
@@ -25,7 +26,7 @@ export function buildEventContext(event: PlannerEvent): Record<string, any> {
     city: event.city || event.location || '',
     country: event.country || '',
     date: event.date || '',
-    jobCode: event.jobCode || '',
+    quoteNumber: event.quoteNumber || '',
   };
 }
 

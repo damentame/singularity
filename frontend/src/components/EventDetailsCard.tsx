@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Calendar, MapPin, Users, Building2, ChevronDown, ChevronUp, Globe, Phone, ShieldAlert, AlertTriangle, Truck } from 'lucide-react';
+import { Calendar, MapPin, Users, Building2, ChevronDown, ChevronUp, Globe, Phone, ShieldAlert, AlertTriangle, Truck, Hash } from 'lucide-react';
 
 import {
   useEventContext,
@@ -16,8 +16,10 @@ import {
 import { COUNTRIES, POPULAR_COUNTRIES, getDialCodeByCountry } from '@/data/countries';
 import { useConfigOptions } from '@/hooks/useConfigOptions';
 import { getVenueOccupiedRange, findVenueConflicts } from '@/data/venueScheduling';
+import { getNextQuoteNumber } from '@/lib/quoteNumbering';
 import FastQuantityInput from './FastQuantityInput';
 import CurrencySwitcher from './CurrencySwitcher';
+import GroupCodePanel from './GroupCodePanel';
 
 
 const GOLD = '#C9A24A';
@@ -474,6 +476,39 @@ const EventDetailsCard: React.FC<EventDetailsCardProps> = ({ event }) => {
           )}
         </div>
       )}
+
+      {/* ═══ QUOTE IDENTITY ═══ */}
+      <GoldDivider />
+      <SubHeading><Hash className="w-3.5 h-3.5 inline mr-1.5" />Quote Identity</SubHeading>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <FieldLabel>Quote Number</FieldLabel>
+          {event.quoteNumber ? (
+            <div className="flex items-center gap-2 px-3 py-2 rounded-lg border" style={{ borderColor: '#EFEFEF', backgroundColor: '#FAFAF7' }}>
+              <span className="text-sm font-mono font-bold" style={{ color: '#1A1A1A' }}>{event.quoteNumber}</span>
+              <span className="text-[9px] text-gray-400 ml-auto">Shared with suppliers</span>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={async () => updateEvent(event.id, { quoteNumber: await getNextQuoteNumber() })}
+              className="w-full px-3 py-2 rounded-lg border border-dashed text-xs font-medium transition-colors hover:shadow-sm"
+              style={{ borderColor: 'rgba(201,162,74,0.3)', color: GOLD }}
+            >
+              Assign Quote Number
+            </button>
+          )}
+        </div>
+        <div>
+          <FieldLabel>Internal Reference</FieldLabel>
+          <TextInput value={event.jobCode || ''} onChange={(v) => updateEvent(event.id, { jobCode: v })} placeholder="Your own tracking code" />
+          <p className="text-[9px] text-gray-300 mt-1 italic">For your own records only — never shown to suppliers.</p>
+        </div>
+      </div>
+
+      <div className="mt-4">
+        <GroupCodePanel event={event} />
+      </div>
 
       {/* ═══ CORPORATE NAMING ═══ */}
       {isCorporate && (

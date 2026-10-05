@@ -12,6 +12,7 @@ import { useAutoSaveStatus } from './EventAutoSaver';
 import ClientDirectory from './ClientDirectory';
 import { seedDemoData, clearDemoData } from '@/lib/demoSeed';
 import { getVenueOccupiedRange } from '@/data/venueScheduling';
+import { getNextQuoteNumber } from '@/lib/quoteNumbering';
 
 
 
@@ -78,11 +79,15 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ onOpenEvent }) => {
     setPreselectedClientId(undefined);
     toast({ title: 'Event Created', description: `"${params.name}" has been created and will auto-save shortly.` });
     onOpenEvent(id);
+
+    // Allocate the universal quote number in the background so creation is never blocked on it
+    getNextQuoteNumber().then(quoteNumber => updateEvent(id, { quoteNumber }));
   };
 
   const handleDuplicate = (eventId: string, eventName: string) => {
-    duplicateEvent(eventId);
+    const newId = duplicateEvent(eventId);
     toast({ title: 'Event Duplicated', description: `Copy of "${eventName}" created.` });
+    getNextQuoteNumber().then(quoteNumber => updateEvent(newId, { quoteNumber }));
   };
 
   const handleDelete = (eventId: string, eventName: string) => {

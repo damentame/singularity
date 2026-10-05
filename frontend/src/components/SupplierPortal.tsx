@@ -83,7 +83,6 @@ const SupplierPortal: React.FC = () => {
         // Reconstruct a minimal PlannerEvent from the stored context snapshot
         const syntheticEvent = {
           id: portalData.batch.eventId,
-          name: ctx.name || '',
           currency: ctx.currency || 'ZAR',
           vatRate: ctx.vatRate ?? 0.15,
           defaultPricesIncludeVat: ctx.defaultPricesIncludeVat ?? true,
@@ -92,7 +91,7 @@ const SupplierPortal: React.FC = () => {
           city: ctx.city || '',
           country: ctx.country || '',
           date: ctx.date || '',
-          jobCode: ctx.jobCode || '',
+          quoteNumber: ctx.quoteNumber || '',
           lineItems: [],
         } as any;
 
@@ -440,7 +439,7 @@ const SupplierPortal: React.FC = () => {
               <div>
                 <div className="flex items-center gap-2">
                   <h1 className="text-sm font-bold" style={{ color: '#1A1A1A' }}>
-                    Tax Invoice Request — {event.jobCode || 'RFQ'}
+                    Tax Invoice Request — {event.quoteNumber || 'RFQ'}
                   </h1>
                   <span
                     className="text-[9px] font-semibold px-2.5 py-0.5 rounded-full text-white"

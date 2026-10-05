@@ -10,7 +10,7 @@ import { supabase } from '@/lib/supabase';
 export interface RFQThreadMessage {
   id: string;
   rfqBatchId: string;
-  senderType: 'coordinator' | 'supplier';
+  senderType: 'coordinator' | 'supplier' | 'system';
   senderName: string;
   body: string;
   createdAt: string;
@@ -47,6 +47,24 @@ export async function sendCoordinatorMessage(
     .single();
 
   if (error) { console.error('sendCoordinatorMessage error:', error); return null; }
+  return rowToMessage(data);
+}
+
+/** Auto-posted notice (e.g. a load-in/load-out time) - rendered distinctly from a hand-typed coordinator message. */
+export async function sendSystemMessage(batchId: string, body: string): Promise<RFQThreadMessage | null> {
+  const { data, error } = await supabase
+    .from('rfq_messages')
+    .insert({
+      id: `rfqm-${crypto.randomUUID()}`,
+      rfq_batch_id: batchId,
+      sender_type: 'system',
+      sender_name: 'Automated Notice',
+      body,
+    })
+    .select()
+    .single();
+
+  if (error) { console.error('sendSystemMessage error:', error); return null; }
   return rowToMessage(data);
 }
 

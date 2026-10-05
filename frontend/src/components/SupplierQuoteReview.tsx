@@ -34,10 +34,10 @@ interface SupplierBundle {
   momentGroups: Record<string, { momentName: string; items: CostLineItem[] }>;
 }
 
-// Generate item reference code: JOB-XXXXX-ITEM-XX
-const generateItemRefCode = (jobCode: string, index: number): string => {
+// Generate item reference code: TO-XXXXXX-ITEM-XX (the universal quote number, never the client's identity)
+const generateItemRefCode = (quoteNumber: string, index: number): string => {
   const padded = String(index + 1).padStart(2, '0');
-  return `${jobCode}-ITEM-${padded}`;
+  return `${quoteNumber || 'PENDING'}-ITEM-${padded}`;
 };
 
 interface SupplierQuoteReviewProps {
@@ -129,7 +129,7 @@ const SupplierQuoteReview: React.FC<SupplierQuoteReviewProps> = ({ event, onClos
       let globalIdx = 0;
       const bundledItems = bundle.lineItems.map(li => {
         const moment = (event.moments || []).find(m => m.id === li.momentId);
-        const refCode = generateItemRefCode(event.jobCode, globalIdx++);
+        const refCode = generateItemRefCode(event.quoteNumber, globalIdx++);
         return {
           refCode,
           name: li.name,
@@ -163,7 +163,7 @@ const SupplierQuoteReview: React.FC<SupplierQuoteReviewProps> = ({ event, onClos
           body: {
             supplierName: bundle.supplierName,
             supplierEmail: bundle.supplierEmail,
-            eventReference: event.jobCode,
+            eventReference: event.quoteNumber || '',
             eventType: EVENT_TYPE_LABELS[event.eventType] || event.eventType,
             eventDate: event.date || '',
             eventLocation: locationStr,
@@ -199,7 +199,7 @@ const SupplierQuoteReview: React.FC<SupplierQuoteReviewProps> = ({ event, onClos
 
       // Mark line items as RFQ sent
       const updatedLineItems = event.lineItems.map(li =>
-        lineItemIds.includes(li.id) ? { ...li, rfqSent: true, rfqJobCode: event.jobCode } : li
+        lineItemIds.includes(li.id) ? { ...li, rfqSent: true, rfqJobCode: event.quoteNumber || event.jobCode } : li
       );
 
       // Log activity
@@ -271,7 +271,7 @@ const SupplierQuoteReview: React.FC<SupplierQuoteReviewProps> = ({ event, onClos
           <div className="flex items-center gap-1.5">
             <Hash className="w-3 h-3" style={{ color: GOLD }} />
             <span className="text-[10px] uppercase tracking-wider text-gray-400">Event Ref:</span>
-            <span className="text-xs font-mono font-bold" style={{ color: '#1A1A1A' }}>{event.jobCode}</span>
+            <span className="text-xs font-mono font-bold" style={{ color: '#1A1A1A' }}>{event.quoteNumber || 'Pending'}</span>
           </div>
           <div className="flex items-center gap-1.5">
             <CalendarDays className="w-3 h-3 text-gray-400" />
@@ -373,7 +373,7 @@ const SupplierQuoteReview: React.FC<SupplierQuoteReviewProps> = ({ event, onClos
                             {group.items.map((item, idx) => {
                               const calc = calculateLineItem(item);
                               const assignment = bundle.assignments.find(a => a.lineItemId === item.id);
-                              const refCode = generateItemRefCode(event.jobCode, bundle.lineItems.indexOf(item));
+                              const refCode = generateItemRefCode(event.quoteNumber, bundle.lineItems.indexOf(item));
 
                               return (
                                 <div
@@ -480,7 +480,7 @@ const SupplierQuoteReview: React.FC<SupplierQuoteReviewProps> = ({ event, onClos
             <div className="flex items-center gap-2">
               <Shield className="w-3.5 h-3.5 text-green-500" />
               <span className="text-[10px] text-gray-400">
-                Suppliers will see event reference <span className="font-mono font-bold" style={{ color: '#1A1A1A' }}>{event.jobCode}</span> only - no client details
+                Suppliers will see quote number <span className="font-mono font-bold" style={{ color: '#1A1A1A' }}>{event.quoteNumber || 'Pending'}</span> only - no client details
               </span>
             </div>
 

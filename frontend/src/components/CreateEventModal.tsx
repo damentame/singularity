@@ -6,7 +6,6 @@ import {
 } from 'lucide-react';
 import {
   EventType, EVENT_TYPE_LABELS, CreateEventParams, ClientType, ClientDetails,
-  CorporateClient, WeddingClient, CelebrationClient,
 } from '@/contexts/EventContext';
 import { useAppContext } from '@/contexts/AppContext';
 import { COUNTRIES, POPULAR_COUNTRIES, getCountryByCode } from '@/data/countries';
@@ -17,6 +16,7 @@ import {
   createClient,
   getDbClientDisplayName,
   addClientDivision,
+  buildClientDetailsFromAccount,
 } from '@/data/clientDbStore';
 import FastQuantityInput from './FastQuantityInput';
 import { toast } from '@/components/ui/use-toast';
@@ -181,7 +181,7 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({ open, onClose, onCr
     setClientMode('search');
     setSelectedAccountId(account.id);
     setSearchQuery(getDbClientDisplayName(account));
-    if (account.client_type === 'corporate') setEventType('corporate');
+    setEventType(account.client_type);
     applyAccountPrefill(account);
     setStep(2);
   }, [open, preselectedClientId, allAccounts, loadingAccounts]);
@@ -189,48 +189,6 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({ open, onClose, onCr
   if (!open) return null;
 
   const isCorporate = eventType === 'corporate';
-
-  // ─── Map a client record onto the ClientDetails shape a proposal needs ─────
-  // Snapshot at creation time — not a live link — so later edits to the client
-  // record don't retroactively rewrite an already-created proposal.
-  function buildClientDetailsFromAccount(account: DbClient, type: EventType): ClientDetails {
-    if (type === 'corporate') {
-      const [contactFirstName, ...rest] = (account.primary_contact_name || '').split(' ');
-      const details: CorporateClient = {
-        companyName: account.company_name || '',
-        vatNumber: account.vat_number || '',
-        registrationNumber: account.registration_number || '',
-        billingAddress: account.billing_address || '',
-        contactFirstName: contactFirstName || '',
-        contactSurname: rest.join(' '),
-        contactEmail: account.primary_contact_email || '',
-        contactTelephoneCode: account.primary_contact_phone_code || '+27',
-        contactTelephone: account.primary_contact_phone || '',
-        accountsPayableEmail: account.accounts_payable_email || '',
-      };
-      return details;
-    }
-    if (type === 'wedding') {
-      const details: WeddingClient = {
-        partner1FirstName: '', partner1Surname: '', partner2FirstName: '', partner2Surname: '',
-        primaryEmail: account.primary_contact_email || '',
-        primaryTelephoneCode: account.primary_contact_phone_code || '+27',
-        primaryTelephone: account.primary_contact_phone || '',
-        billingName: account.primary_contact_name || '',
-        billingAddress: account.billing_address || '',
-      };
-      return details;
-    }
-    const details: CelebrationClient = {
-      hostFirstName: '', hostSurname: '',
-      hostEmail: account.primary_contact_email || '',
-      hostTelephoneCode: account.primary_contact_phone_code || '+27',
-      hostTelephone: account.primary_contact_phone || '',
-      billingName: account.primary_contact_name || '',
-      billingAddress: account.billing_address || '',
-    };
-    return details;
-  }
 
   // ─── Pre-fill Step 2 fields from a resolved client account ─────────────────
   function applyAccountPrefill(account: DbClient) {

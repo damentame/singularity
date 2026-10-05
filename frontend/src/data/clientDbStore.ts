@@ -1,5 +1,6 @@
 // ─── Client Database Store (Supabase) ─────────────────────────────────────────
 import { supabase } from '@/lib/supabase';
+import type { EventType, ClientDetails, CorporateClient, WeddingClient, CelebrationClient } from '@/contexts/EventContext';
 
 export interface DbClient {
   id: string;
@@ -217,6 +218,52 @@ export const upsertClientEvent = async (
 };
 
 // ─── Display name helper ─────────────────────────────────────────────────────
+
+// ─── Map a client record onto the ClientDetails shape a proposal needs ───────
+// Snapshot, not a live link — captures the client record's details at the
+// moment it's applied (new proposal, or switching an existing one to a
+// different client), so later edits to the client record don't retroactively
+// rewrite an already-created proposal.
+export const buildClientDetailsFromAccount = (account: DbClient, type: EventType): ClientDetails => {
+  if (type === 'corporate') {
+    const [contactFirstName, ...rest] = (account.primary_contact_name || '').split(' ');
+    const details: CorporateClient = {
+      companyName: account.company_name || '',
+      vatNumber: account.vat_number || '',
+      registrationNumber: account.registration_number || '',
+      billingAddress: account.billing_address || '',
+      contactFirstName: contactFirstName || '',
+      contactSurname: rest.join(' '),
+      contactEmail: account.primary_contact_email || '',
+      contactTelephoneCode: account.primary_contact_phone_code || '+27',
+      contactTelephone: account.primary_contact_phone || '',
+      accountsPayableEmail: account.accounts_payable_email || '',
+    };
+    return details;
+  }
+  if (type === 'wedding') {
+    const [partner1FirstName, ...partner1Rest] = (account.primary_contact_name || '').split(' ');
+    const details: WeddingClient = {
+      partner1FirstName: partner1FirstName || '', partner1Surname: partner1Rest.join(' '),
+      partner2FirstName: '', partner2Surname: '',
+      primaryEmail: account.primary_contact_email || '',
+      primaryTelephoneCode: account.primary_contact_phone_code || '+27',
+      primaryTelephone: account.primary_contact_phone || '',
+      billingName: account.primary_contact_name || '',
+      billingAddress: account.billing_address || '',
+    };
+    return details;
+  }
+  const details: CelebrationClient = {
+    hostFirstName: '', hostSurname: '',
+    hostEmail: account.primary_contact_email || '',
+    hostTelephoneCode: account.primary_contact_phone_code || '+27',
+    hostTelephone: account.primary_contact_phone || '',
+    billingName: account.primary_contact_name || '',
+    billingAddress: account.billing_address || '',
+  };
+  return details;
+};
 
 export const getDbClientDisplayName = (client: DbClient): string => {
   if (client.client_type === 'corporate' && client.company_name) return client.company_name;

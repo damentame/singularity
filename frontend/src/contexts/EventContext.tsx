@@ -260,6 +260,29 @@ export interface EventMoment {
   sortOrder: number;
 }
 
+// ─── v16: Supplier Load-In / Load-Out Scheduling ─────────────────────────────
+// Distinct from the single venue-level load_in/load_out EventMoment (which
+// marks when the *venue* is occupied). A single event can have many of these:
+// one supplier may need several separate slots (e.g. a florist setting up the
+// venue at 8am, then returning at noon with the bridal party's bouquets).
+
+export type LoadSlotType = 'load_in' | 'load_out';
+
+export interface SupplierLoadSlot {
+  id: string;
+  supplierKey: string;      // `${supplierName}|||${supplierEmail}`.toLowerCase() — matches SupplierAssignment grouping
+  supplierName: string;
+  supplierEmail: string;
+  type: LoadSlotType;
+  label: string;            // e.g. "Morning setup", "Bridal bouquet delivery"
+  date: string;
+  startTime: string;
+  endTime: string;
+  venueSpaceId: string;
+  notes: string;
+  notifiedAt: string;       // '' until an automated message has told the supplier this time
+}
+
 
 // ─── RFQ ─────────────────────────────────────────────────────────────────────
 
@@ -700,7 +723,10 @@ export interface PlannerEvent {
   versions: EventVersion[];
   currentVersion: number;
   rfqMessages: RFQMessage[];
-  jobCode: string;
+  jobCode: string;                     // coordinator's own internal reference — never shown to suppliers
+  quoteNumber: string;                 // v16: universal sequential code e.g. "TO-000001" — safe to share externally
+  groupCode: string;                   // v16: links multiple quotes (e.g. a multi-day event) into one combined total
+  loadSlots: SupplierLoadSlot[];       // v16: per-supplier load-in/load-out time slots
   companyName: string;
   divisionName: string;
   eventTitle: string;
@@ -877,6 +903,13 @@ const generateOrderNumber = () => {
   return code;
 };
 
+const generateGroupCode = () => {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let code = 'GRP-';
+  for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
+  return code;
+};
+
 const defaultLineItems: Omit<CostLineItem, 'id' | 'supplierAssignmentId' | 'supplierPriceIncludesVat' | 'vatRateUsed' | 'isDryHire'>[] = [
 
 
@@ -970,6 +1003,16 @@ interface EventContextType {
   generateShoppingListFromSO: (eventId: string, salesOrderId: string) => string;
   // ─── Supabase Sync ─────────────────────────────────────────────────────────
   mergeEventsFromSupabase: (remoteEvents: PlannerEvent[]) => void;
+  // ─── v16: Supplier Load Slots ──────────────────────────────────────────────
+  addLoadSlot: (eventId: string, slot: Omit<SupplierLoadSlot, 'id'>) => string;
+  updateLoadSlot: (eventId: string, slotId: string, updates: Partial<SupplierLoadSlot>) => void;
+  removeLoadSlot: (eventId: string, slotId: string) => void;
+  // ─── v16: Group Codes (link multiple quotes into one combined total) ──────
+  linkEventToGroup: (eventId: string, groupCode?: string) => string;
+  linkEventsToGroup: (eventIds: string[], groupCode?: string) => string;
+  unlinkEventFromGroup: (eventId: string) => void;
+  getGroupedEvents: (groupCode: string) => PlannerEvent[];
+  getGroupTotal: (groupCode: string) => EventSummary & { eventCount: number; currencies: string[] };
 }
 
 export interface CreateEventParams {
@@ -991,6 +1034,7 @@ export interface CreateEventParams {
   useStandardCatalog?: boolean;        // v13: seed from the standard catalog instead of starting blank
   clientDetails?: ClientDetails;       // v15: pre-filled snapshot from the client record, instead of starting blank
   currency?: string;                   // v15: explicit currency pick, instead of always deriving from country
+  quoteNumber?: string;                // v16: pre-allocated universal code (e.g. from getNextQuoteNumber()); blank if unavailable
 }
 
 
@@ -1086,6 +1130,7 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         lineItems: JSON.parse(JSON.stringify(lineItems)),
       }],
       currentVersion: 1, rfqMessages: [], jobCode,
+      quoteNumber: params.quoteNumber || '', groupCode: '', loadSlots: [],
       companyName: params.companyName || '',
       divisionName: params.divisionName || '',
       eventTitle: params.eventTitle || '',
@@ -1334,6 +1379,7 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       ...JSON.parse(JSON.stringify(event)),
       id, name: `${getEventDisplayName(event)} (Copy)`, status: 'draft' as const,
       createdAt: now, updatedAt: now, jobCode: generateJobCode(),
+      quoteNumber: '', groupCode: '', loadSlots: [],
       versions: [{
         id: `ver-${crypto.randomUUID()}`, versionNumber: 1, timestamp: now,
         changeDescription: `Duplicated from "${getEventDisplayName(event)}"`,
@@ -1394,6 +1440,72 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       updatedAt: new Date().toISOString(),
     }));
   }, [events, persistEvents]);
+
+  // ─── v16: Supplier Load Slots ────────────────────────────────────────────────
+
+  const addLoadSlot = useCallback((eventId: string, slot: Omit<SupplierLoadSlot, 'id'>): string => {
+    const id = `ls-${crypto.randomUUID()}`;
+    persistEvents(events.map(e => e.id !== eventId ? e : {
+      ...e, loadSlots: [...(e.loadSlots || []), { ...slot, id }], updatedAt: new Date().toISOString(),
+    }));
+    return id;
+  }, [events, persistEvents]);
+
+  const updateLoadSlot = useCallback((eventId: string, slotId: string, updates: Partial<SupplierLoadSlot>) => {
+    persistEvents(events.map(e => e.id !== eventId ? e : {
+      ...e, loadSlots: (e.loadSlots || []).map(s => s.id === slotId ? { ...s, ...updates } : s), updatedAt: new Date().toISOString(),
+    }));
+  }, [events, persistEvents]);
+
+  const removeLoadSlot = useCallback((eventId: string, slotId: string) => {
+    persistEvents(events.map(e => e.id !== eventId ? e : {
+      ...e, loadSlots: (e.loadSlots || []).filter(s => s.id !== slotId), updatedAt: new Date().toISOString(),
+    }));
+  }, [events, persistEvents]);
+
+  // ─── v16: Group Codes ────────────────────────────────────────────────────────
+
+  // Links every id in one atomic update - calling linkEventToGroup in a loop instead would have
+  // each call compute its patch from the same pre-loop `events` snapshot, so only the last call's
+  // change would stick (the exact stale-closure chaining bug this codebase has hit before).
+  const linkEventsToGroup = useCallback((eventIds: string[], groupCode?: string): string => {
+    const code = groupCode || generateGroupCode();
+    const idSet = new Set(eventIds);
+    persistEvents(events.map(e => idSet.has(e.id) ? { ...e, groupCode: code, updatedAt: new Date().toISOString() } : e));
+    return code;
+  }, [events, persistEvents]);
+
+  const linkEventToGroup = useCallback((eventId: string, groupCode?: string): string => {
+    return linkEventsToGroup([eventId], groupCode);
+  }, [linkEventsToGroup]);
+
+  const unlinkEventFromGroup = useCallback((eventId: string) => {
+    persistEvents(events.map(e => e.id !== eventId ? e : { ...e, groupCode: '', updatedAt: new Date().toISOString() }));
+  }, [events, persistEvents]);
+
+  const getGroupedEvents = useCallback((groupCode: string): PlannerEvent[] => {
+    if (!groupCode) return [];
+    return events.filter(e => e.groupCode === groupCode);
+  }, [events]);
+
+  const getGroupTotal = useCallback((groupCode: string): EventSummary & { eventCount: number; currencies: string[] } => {
+    const grouped = events.filter(e => e.groupCode === groupCode);
+    const totals = grouped.reduce((acc, e) => {
+      const s = calculateSummary(e.lineItems);
+      return {
+        totalSupplierCost: acc.totalSupplierCost + s.totalSupplierCost,
+        totalClientPrice: acc.totalClientPrice + s.totalClientPrice,
+        grossMarginValue: acc.grossMarginValue + s.grossMarginValue,
+        totalNet: acc.totalNet + s.totalNet,
+        totalVat: acc.totalVat + s.totalVat,
+        totalGross: acc.totalGross + s.totalGross,
+      };
+    }, { totalSupplierCost: 0, totalClientPrice: 0, grossMarginValue: 0, totalNet: 0, totalVat: 0, totalGross: 0 });
+    const grossMarginPercent = totals.totalClientPrice > 0 ? (totals.grossMarginValue / totals.totalClientPrice) * 100 : 0;
+    // Surfaced so the UI can warn instead of silently adding incompatible currencies together.
+    const currencies = Array.from(new Set(grouped.map(e => e.billingCurrency || e.currency || 'ZAR')));
+    return { ...totals, grossMarginPercent, marginWarning: grossMarginPercent < 25, eventCount: grouped.length, currencies };
+  }, [events, calculateSummary]);
 
   // ─── Programs ──────────────────────────────────────────────────────────────
 
@@ -1734,6 +1846,9 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       addShoppingListItem, updateShoppingListItem, removeShoppingListItem,
       acceptProposal, updateSalesOrder, generateShoppingListFromSO,
       mergeEventsFromSupabase,
+      // v16
+      addLoadSlot, updateLoadSlot, removeLoadSlot,
+      linkEventToGroup, linkEventsToGroup, unlinkEventFromGroup, getGroupedEvents, getGroupTotal,
     }}>
       {children}
     </EventContext.Provider>

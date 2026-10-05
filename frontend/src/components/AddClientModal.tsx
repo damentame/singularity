@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { X, User, Building2, Mail, Phone, MapPin, FileText, Tag, ChevronDown, Loader2, Heart, Briefcase, PartyPopper } from 'lucide-react';
 import { useAppContext } from '@/contexts/AppContext';
-import { createClient, CreateClientInput } from '@/data/clientDbStore';
+import { createClient, CreateClientInput, DbClient } from '@/data/clientDbStore';
 import { COUNTRIES, POPULAR_COUNTRIES, getCountryByCode } from '@/data/countries';
 import { toast } from '@/components/ui/use-toast';
 
@@ -10,7 +10,7 @@ const GOLD = '#C9A24A';
 interface AddClientModalProps {
   open: boolean;
   onClose: () => void;
-  onCreated: () => void;
+  onCreated: (client: DbClient) => void;
 }
 
 const CLIENT_TYPES = [
@@ -138,7 +138,7 @@ const AddClientModal: React.FC<AddClientModalProps> = ({ open, onClose, onCreate
       const result = await createClient(input);
       if (result) {
         toast({ title: 'Client Added', description: `${name} has been added to your directory.` });
-        onCreated();
+        onCreated(result);
         onClose();
       } else {
         toast({ title: 'Error', description: 'Could not save client. Please try again.', variant: 'destructive' });

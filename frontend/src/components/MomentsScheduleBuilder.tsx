@@ -26,6 +26,7 @@ import CostingTable from './CostingTable';
 import MomentMoodBoard, { MoodBoardImage } from './MomentMoodBoard';
 import MoodBoardTemplateLibrary from './MoodBoardTemplateLibrary';
 import { getMoodBoardImages, setMoodBoardImages, getMoodBoardImageCount } from '@/data/moodBoardStore';
+import LoadScheduleManager from './LoadScheduleManager';
 
 const GOLD = '#C9A24A';
 const fmt = (n: number) => 'R ' + n.toLocaleString('en-ZA', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
@@ -686,10 +687,11 @@ const MomentsScheduleBuilder: React.FC<MomentsScheduleBuilderProps> = ({ event, 
 
           const handleEmailAllSuppliers = () => {
             const momentName = isOverall ? 'Overall Event' : activeMoment?.name || 'Event';
-            const subject = encodeURIComponent(`Quote Request - ${momentName} - ${event.jobCode}`);
+            const quoteRef = event.quoteNumber || 'Pending';
+            const subject = encodeURIComponent(`Quote Request - ${momentName} - ${quoteRef}`);
             const itemList = supplierList.flatMap(s => s.items.map(i => `  - ${i} (${s.name})`)).join('\n');
             const body = encodeURIComponent(
-              `Dear Supplier,\n\nWe are requesting quotes for the following items for "${momentName}":\n\n${itemList}\n\nEvent Reference: ${event.jobCode}\n\nPlease provide your best pricing at your earliest convenience.\n\nKind regards`
+              `Dear Supplier,\n\nWe are requesting quotes for the following items for "${momentName}":\n\n${itemList}\n\nEvent Reference: ${quoteRef}\n\nPlease provide your best pricing at your earliest convenience.\n\nKind regards`
             );
             const mailto = `mailto:${supplierEmails.join(',')}?subject=${subject}&body=${body}`;
             window.open(mailto, '_blank');
@@ -738,9 +740,10 @@ const MomentsScheduleBuilder: React.FC<MomentsScheduleBuilderProps> = ({ event, 
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            const subject = encodeURIComponent(`Quote Request - ${activeMoment?.name || 'Event'} - ${event.jobCode}`);
+                            const quoteRef = event.quoteNumber || 'Pending';
+                            const subject = encodeURIComponent(`Quote Request - ${activeMoment?.name || 'Event'} - ${quoteRef}`);
                             const items = supplier.items.map(i => `  - ${i}`).join('\n');
-                            const body = encodeURIComponent(`Dear ${supplier.name},\n\nWe are requesting a quote for:\n\n${items}\n\nEvent Reference: ${event.jobCode}\n\nKind regards`);
+                            const body = encodeURIComponent(`Dear ${supplier.name},\n\nWe are requesting a quote for:\n\n${items}\n\nEvent Reference: ${quoteRef}\n\nKind regards`);
                             window.open(`mailto:${supplier.email}?subject=${subject}&body=${body}`, '_blank');
                           }}
                           className="p-1 rounded hover:bg-blue-50 transition-colors"
@@ -1190,6 +1193,9 @@ const MomentsScheduleBuilder: React.FC<MomentsScheduleBuilderProps> = ({ event, 
           <span className="text-xs font-medium">Add Moment</span>
         </button>
       )}
+
+      <div className="h-px" style={{ backgroundColor: 'rgba(201,162,74,0.08)' }} />
+      <LoadScheduleManager event={event} />
 
       {/* View Full Event Costing Link */}
       {onViewFullCosting && topLevelMoments.length > 0 && (
