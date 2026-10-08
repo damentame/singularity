@@ -1,22 +1,29 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { Calendar, Users, MapPin, Trash2, Copy, FileText, Layers, ChevronLeft, ChevronRight, User, Cloud, CloudOff, RefreshCw, CheckCircle, Download, Loader2, Database, Clock, UserCircle, Sparkles } from 'lucide-react';
-import { useEventContext, EVENT_TYPE_LABELS, CreateEventParams, getEventDisplayName, PlannerEvent } from '@/contexts/EventContext';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
+import { Calendar, Users, MapPin, Trash2, FileText, ChevronLeft, ChevronRight, ChevronDown, Cloud, CloudOff, RefreshCw, CheckCircle, Download, Loader2, Database, Clock, UserCircle, Sparkles } from 'lucide-react';
+import { useEventContext, CreateEventParams, getEventDisplayName, PlannerEvent } from '@/contexts/EventContext';
 import { useAppContext } from '@/contexts/AppContext';
 
-import { getCountryByCode } from '@/data/countries';
-import { DbClient, fetchClients, getDbClientDisplayName, migrateLocalClientsToDb } from '@/data/clientDbStore';
+import { DbClient, fetchClients, migrateLocalClientsToDb } from '@/data/clientDbStore';
 import CreateEventModal from './CreateEventModal';
 import CoordinatorHeader from './CoordinatorHeader';
+import EventListCard from './EventListCard';
 import { toast } from '@/components/ui/use-toast';
 import { useAutoSaveStatus } from './EventAutoSaver';
 import ClientDirectory from './ClientDirectory';
 import { seedDemoData, clearDemoData } from '@/lib/demoSeed';
+import { themeStyle, usePageTheme } from '@/theme/pageTheme';
 import { getVenueOccupiedRange } from '@/data/venueScheduling';
 import { getNextQuoteNumber } from '@/lib/quoteNumbering';
 
 
 
-const GOLD = '#C9A24A';
+const GOLD = 'var(--pt-primary, #C9A24A)';
+/** Warm grey so white cards read against the cream page without a heavy outline */
+const CARD_BORDER = 'var(--pt-border, #D4CFC6)';
+const CARD_SHADOW = '0 1px 3px rgba(26, 26, 26, 0.06)';
+/** Slightly deeper than the page so the calendar panel reads, without a heavy frame */
+const CAL_CANVAS = 'color-mix(in srgb, var(--pt-bg, #F5F4F0) 78%, var(--pt-border, #D4CFC6))';
+const CAL_INK = 'var(--pt-text, #1A1A1A)';
 const fmt = (n: number) => 'R ' + n.toLocaleString('en-ZA', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 
 interface PlannerDashboardProps {
@@ -24,12 +31,13 @@ interface PlannerDashboardProps {
 }
 
 const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ onOpenEvent }) => {
+  const pageTheme = usePageTheme('coordinator-dashboard');
   const { events, createEvent, deleteEvent, duplicateEvent, calculateSummary, updateEvent } = useEventContext();
   const { user } = useAppContext();
   const [showCreate, setShowCreate] = useState(false);
   const [preselectedClientId, setPreselectedClientId] = useState<string | undefined>(undefined);
   const [filter, setFilter] = useState<'all' | 'active' | 'draft' | 'completed'>('all');
-  const [viewMode, setViewMode] = useState<'grid' | 'calendar' | 'saved' | 'clients'>('grid');
+  const [viewMode, setViewMode] = useState<'grid' | 'calendar' | 'saved' | 'clients'>('calendar');
   const [clientsById, setClientsById] = useState<Record<string, DbClient>>({});
 
   // Migrate any legacy localStorage clients into the shared Supabase store once,
@@ -49,6 +57,9 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ onOpenEvent }) => {
   }, []);
 
   const [calendarMonth, setCalendarMonth] = useState(() => new Date());
+  const [calendarScale, setCalendarScale] = useState<'month' | 'year'>('year');
+  const [hoveredDayKey, setHoveredDayKey] = useState<string | null>(null);
+  const yearScrollRef = useRef<HTMLDivElement>(null);
   const [loadingEventId, setLoadingEventId] = useState<string | null>(null);
 
   const {
@@ -64,7 +75,40 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ onOpenEvent }) => {
     deleteEventFromDB,
   } = useAutoSaveStatus();
 
-  const filtered = events.filter((e) => filter === 'all' || e.status === filter);
+  const filtered = useMemo(
+    () => events.filter((e) => filter === 'all' || e.status === filter),
+    [events, filter],
+  );
+
+  const sortedFiltered = useMemo(() => {
+    const now = Date.now();
+    const dayMs = 1000 * 60 * 60 * 24;
+    return [...filtered].sort((a, b) => {
+      const aUpdated = new Date(a.updatedAt || a.createdAt || 0).getTime();
+      const bUpdated = new Date(b.updatedAt || b.createdAt || 0).getTime();
+      const aStart = a.date ? new Date(a.date + 'T12:00:00').getTime() : Number.POSITIVE_INFINITY;
+      const bStart = b.date ? new Date(b.date + 'T12:00:00').getTime() : Number.POSITIVE_INFINITY;
+      const aScore = (now - aUpdated) / dayMs + (Number.isFinite(aStart) ? Math.abs(aStart - now) / dayMs : 1e6);
+      const bScore = (now - bUpdated) / dayMs + (Number.isFinite(bStart) ? Math.abs(bStart - now) / dayMs : 1e6);
+      if (Math.abs(aScore - bScore) > 0.01) return aScore - bScore;
+      return bUpdated - aUpdated;
+    });
+  }, [filtered]);
+
+  const { recentEvents, remainingEvents } = useMemo(() => {
+    const byUpdated = [...filtered].sort((a, b) => {
+      const aT = new Date(a.updatedAt || a.createdAt || 0).getTime();
+      const bT = new Date(b.updatedAt || b.createdAt || 0).getTime();
+      return bT - aT;
+    });
+    const recentCount = Math.min(8, byUpdated.length);
+    const recent = byUpdated.slice(0, recentCount);
+    const recentIds = new Set(recent.map((e) => e.id));
+    return {
+      recentEvents: recent,
+      remainingEvents: sortedFiltered.filter((e) => !recentIds.has(e.id)),
+    };
+  }, [filtered, sortedFiltered]);
 
   // Load saved events when switching to saved tab
   useEffect(() => {
@@ -202,7 +246,7 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ onOpenEvent }) => {
     for (let d = 1; d <= lastDay.getDate(); d++) {
       const date = new Date(year, month, d);
       const dateStr = date.toISOString().split('T')[0];
-      const dayEvents = events
+      const dayEvents = filtered
         .filter(e => {
           const { start, end } = getVenueOccupiedRange(e);
           return start <= dateStr && dateStr <= end;
@@ -219,22 +263,54 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ onOpenEvent }) => {
       days.push({ date: d, isCurrentMonth: false, events: [] });
     }
     return days;
-  }, [calendarMonth, events]);
+  }, [calendarMonth, filtered]);
+
+  const yearMonths = useMemo(() => {
+    const year = calendarMonth.getFullYear();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return Array.from({ length: 12 }, (_, month) => {
+      const start = `${year}-${pad(month + 1)}-01`;
+      const last = new Date(year, month + 1, 0);
+      const end = `${year}-${pad(month + 1)}-${pad(last.getDate())}`;
+      const monthEvents = filtered
+        .filter((e) => {
+          if (!e.date) return false;
+          const { start: eventStart, end: eventEnd } = getVenueOccupiedRange(e);
+          return eventStart <= end && eventEnd >= start;
+        })
+        .sort((a, b) => a.date.localeCompare(b.date) || getEventDisplayName(a).localeCompare(getEventDisplayName(b)));
+      return {
+        month,
+        label: new Date(year, month, 1).toLocaleDateString('en-GB', { month: 'long' }),
+        events: monthEvents,
+        isCurrent: month === new Date().getMonth() && year === new Date().getFullYear(),
+      };
+    });
+  }, [calendarMonth, filtered]);
+
+  useEffect(() => {
+    if (viewMode !== 'calendar' || calendarScale !== 'year') return;
+    const scroller = yearScrollRef.current;
+    const current = scroller?.querySelector('[data-current-month="true"]') as HTMLElement | null;
+    if (!scroller || !current) return;
+    scroller.scrollLeft = Math.max(0, current.offsetLeft - 12);
+  }, [viewMode, calendarScale, calendarMonth]);
 
   const monthLabel = calendarMonth.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+  const yearLabel = String(calendarMonth.getFullYear());
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: '#F5F4F0' }}>
+    <div className="min-h-screen" style={themeStyle(pageTheme)}>
       <CoordinatorHeader onCreateEvent={() => setShowCreate(true)} />
 
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
         {/* Title + Save Controls */}
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h1 className="text-3xl font-light mb-1" style={{ fontFamily: '"Playfair Display", Georgia, serif', color: '#1A1A1A' }}>
+            <h1 className="text-3xl font-light mb-1" style={{ fontFamily: '"Playfair Display", Georgia, serif', color: 'var(--pt-text, #1A1A1A)' }}>
               {viewMode === 'clients' ? 'Clients' : 'Events'}
             </h1>
-            <p className="text-sm text-gray-400" style={{ fontFamily: '"Inter", sans-serif' }}>
+            <p className="text-sm" style={{ fontFamily: '"Inter", sans-serif', color: 'var(--pt-muted, #8A8175)' }}>
               {viewMode === 'clients' ? 'Manage your client directory' : `${events.length} event${events.length !== 1 ? 's' : ''} total`}
             </p>
           </div>
@@ -291,7 +367,7 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ onOpenEvent }) => {
                 onClick={handleSaveAll}
                 disabled={isSaving || events.length === 0}
                 className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-medium transition-all disabled:opacity-40"
-                style={{ backgroundColor: GOLD, color: '#FFF' }}
+                style={{ backgroundColor: GOLD, color: 'var(--pt-on-primary, #FFF)' }}
               >
                 <Database className="w-3.5 h-3.5" />
                 Save All
@@ -354,21 +430,43 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ onOpenEvent }) => {
 
         {/* Filter tabs (for grid/calendar only) */}
         {(viewMode === 'grid' || viewMode === 'calendar') && (
-          <div className="flex gap-1 mb-8 p-1 rounded-xl inline-flex" style={{ backgroundColor: 'rgba(0,0,0,0.04)' }}>
-            {(['all', 'active', 'draft', 'completed'] as const).map((f) => (
-              <button
-                key={f}
-                onClick={() => setFilter(f)}
-                className="px-4 py-2 rounded-lg text-xs font-medium uppercase tracking-wider transition-all"
-                style={{
-                  backgroundColor: filter === f ? '#FFF' : 'transparent',
-                  color: filter === f ? '#1A1A1A' : '#999',
-                  boxShadow: filter === f ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
-                }}
-              >
-                {f}
-              </button>
-            ))}
+          <div className={`mb-8 flex items-center gap-3 ${viewMode === 'calendar' ? 'justify-between' : ''}`}>
+            <div className="flex gap-1 p-1 rounded-xl inline-flex" style={{ backgroundColor: 'rgba(0,0,0,0.04)' }}>
+              {(['all', 'active', 'draft', 'completed'] as const).map((f) => (
+                <button
+                  key={f}
+                  onClick={() => setFilter(f)}
+                  className="px-4 py-2 rounded-lg text-xs font-medium uppercase tracking-wider transition-all"
+                  style={{
+                    backgroundColor: filter === f ? '#FFF' : 'transparent',
+                    color: filter === f ? '#1A1A1A' : '#999',
+                    boxShadow: filter === f ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                  }}
+                >
+                  {f}
+                </button>
+              ))}
+            </div>
+            {viewMode === 'calendar' && (
+              <label className="relative shrink-0">
+                <span className="sr-only">Calendar range</span>
+                <select
+                  value={calendarScale}
+                  onChange={(e) => setCalendarScale(e.target.value as 'month' | 'year')}
+                  className="appearance-none pl-3 pr-8 py-2 rounded-lg text-xs font-medium uppercase tracking-wider cursor-pointer"
+                  style={{
+                    backgroundColor: '#FFF',
+                    color: '#1A1A1A',
+                    border: `1px solid ${CARD_BORDER}`,
+                    boxShadow: CARD_SHADOW,
+                  }}
+                >
+                  <option value="month">Month</option>
+                  <option value="year">Year</option>
+                </select>
+                <ChevronDown className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400" />
+              </label>
+            )}
           </div>
         )}
 
@@ -426,7 +524,7 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ onOpenEvent }) => {
                     onClick={handleSaveAll}
                     disabled={isSaving}
                     className="px-6 py-2.5 rounded-lg text-xs font-medium uppercase tracking-wider"
-                    style={{ backgroundColor: GOLD, color: '#FFF' }}
+                    style={{ backgroundColor: GOLD, color: 'var(--pt-on-primary, #FFF)' }}
                   >
                     {isSaving ? 'Saving...' : `Save ${events.length} Event${events.length !== 1 ? 's' : ''} Now`}
                   </button>
@@ -442,7 +540,7 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ onOpenEvent }) => {
                     <div
                       key={saved.id}
                       className="bg-white rounded-2xl border overflow-hidden transition-all hover:shadow-md group"
-                      style={{ borderColor: 'rgba(201,162,74,0.15)' }}
+                      style={{ borderColor: CARD_BORDER, boxShadow: CARD_SHADOW }}
                     >
                       <div className="p-6">
                         {/* Status badges */}
@@ -560,50 +658,169 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ onOpenEvent }) => {
         )}
 
         {/* ─── CALENDAR VIEW ─── */}
-        {viewMode === 'calendar' && (
-          <div className="bg-white rounded-2xl border p-6 mb-8" style={{ borderColor: 'rgba(201,162,74,0.15)' }}>
+        {viewMode === 'calendar' && calendarScale === 'year' && (
+          <div className="rounded-2xl border p-5 sm:p-6 mb-8" style={{ backgroundColor: CAL_CANVAS, borderColor: '#D4CFC6', boxShadow: CARD_SHADOW }}>
             <div className="flex items-center justify-between mb-6">
-              <button onClick={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1, 1))} className="p-2 rounded-lg hover:bg-black/5 transition-colors">
-                <ChevronLeft className="w-4 h-4 text-gray-500" />
+              <button onClick={() => setCalendarMonth(new Date(calendarMonth.getFullYear() - 1, calendarMonth.getMonth(), 1))} className="p-2.5 rounded-full transition-colors" style={{ backgroundColor: '#FFF', border: '1px solid #D4CFC6', color: '#6B6560' }} aria-label="Previous year">
+                <ChevronLeft className="w-4 h-4" />
               </button>
-              <h2 className="text-lg font-light" style={{ fontFamily: '"Playfair Display", Georgia, serif', color: '#1A1A1A' }}>{monthLabel}</h2>
-              <button onClick={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1))} className="p-2 rounded-lg hover:bg-black/5 transition-colors">
-                <ChevronRight className="w-4 h-4 text-gray-500" />
+              <div className="text-center">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.22em] mb-1" style={{ color: '#5E584F' }}>Year</p>
+                <h2 className="text-4xl leading-none" style={{ fontFamily: '"Playfair Display", Georgia, serif', color: CAL_INK, fontWeight: 600 }}>{yearLabel}</h2>
+                <div className="mx-auto mt-2 h-0.5 w-12 rounded-full" style={{ backgroundColor: GOLD }} />
+              </div>
+              <button onClick={() => setCalendarMonth(new Date(calendarMonth.getFullYear() + 1, calendarMonth.getMonth(), 1))} className="p-2.5 rounded-full transition-colors" style={{ backgroundColor: '#FFF', border: '1px solid #D4CFC6', color: '#6B6560' }} aria-label="Next year">
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+            <div ref={yearScrollRef} className="flex gap-3 overflow-x-auto pb-2" style={{ scrollbarWidth: 'thin' }}>
+              {yearMonths.map((month) => (
+                <section
+                  key={month.month}
+                  data-current-month={month.isCurrent ? 'true' : undefined}
+                  className="w-[240px] shrink-0 rounded-xl overflow-hidden"
+                  style={{
+                    backgroundColor: '#FBF9F5',
+                    border: month.isCurrent ? `1px solid ${GOLD}` : '1px solid #D4CFC6',
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCalendarMonth(new Date(calendarMonth.getFullYear(), month.month, 1));
+                      setCalendarScale('month');
+                    }}
+                    className="w-full flex items-center justify-between px-3 py-2.5 text-left"
+                    style={{ backgroundColor: month.isCurrent ? '#F6EFD9' : '#F3EEE6' }}
+                  >
+                    <span className="text-sm font-medium" style={{ fontFamily: '"Playfair Display", Georgia, serif', color: '#3F3A34' }}>
+                      {month.label}
+                    </span>
+                    <span
+                      className="text-[10px] tabular-nums px-1.5 py-0.5 rounded-full"
+                      style={{ backgroundColor: 'rgba(26,26,26,0.05)', color: '#6B6560' }}
+                    >
+                      {month.events.length}
+                    </span>
+                  </button>
+                  <div className="p-3">
+                    {month.events.length === 0 ? (
+                      <p className="text-[11px] px-0.5" style={{ color: '#9A948A' }}>No events</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {month.events.map((evt) => (
+                          <EventListCard
+                            key={evt.id}
+                            event={evt}
+                            summary={calculateSummary(evt.lineItems || [])}
+                            clientsById={clientsById}
+                            variant="compact"
+                            onOpen={onOpenEvent}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </section>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {viewMode === 'calendar' && calendarScale === 'month' && (
+          <div className="rounded-2xl border p-5 sm:p-6 mb-8" style={{ backgroundColor: CAL_CANVAS, borderColor: '#D4CFC6', boxShadow: CARD_SHADOW }}>
+            <div className="flex items-center justify-between mb-6">
+              <button onClick={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1, 1))} className="p-2.5 rounded-full transition-colors" style={{ backgroundColor: '#FFF', border: '1px solid #D4CFC6', color: '#6B6560' }} aria-label="Previous month">
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <div className="text-center">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.22em] mb-1" style={{ color: '#5E584F' }}>Month</p>
+                <h2 className="text-3xl leading-none" style={{ fontFamily: '"Playfair Display", Georgia, serif', color: CAL_INK, fontWeight: 600 }}>{monthLabel}</h2>
+                <div className="mx-auto mt-2 h-0.5 w-12 rounded-full" style={{ backgroundColor: GOLD }} />
+              </div>
+              <button onClick={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1))} className="p-2.5 rounded-full transition-colors" style={{ backgroundColor: '#FFF', border: '1px solid #D4CFC6', color: '#6B6560' }} aria-label="Next month">
+                <ChevronRight className="w-4 h-4" />
               </button>
             </div>
             <div className="grid grid-cols-7 gap-px mb-1">
               {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => (
-                <div key={d} className="text-center text-[10px] uppercase tracking-wider text-gray-400 py-2">{d}</div>
+                <div key={d} className="text-center text-[10px] font-medium uppercase tracking-wider py-2" style={{ color: '#8A8175' }}>{d}</div>
               ))}
             </div>
-            <div className="grid grid-cols-7 gap-px rounded-xl overflow-hidden" style={{ backgroundColor: 'rgba(201,162,74,0.08)' }}>
+            <div className="grid grid-cols-7 gap-px rounded-xl overflow-visible" style={{ backgroundColor: '#E4DDD0' }}>
               {calendarDays.map((day, i) => {
                 const isToday = day.date.toDateString() === new Date().toDateString();
+                const dayKey = day.date.toISOString().slice(0, 10);
+                const isHovered = hoveredDayKey === dayKey;
+                const alignRight = day.date.getDay() >= 4;
                 return (
-                  <div key={i} className="min-h-[80px] p-1.5 transition-colors" style={{ backgroundColor: day.isCurrentMonth ? '#FFF' : '#FAFAF7' }}>
+                  <div
+                    key={i}
+                    className="relative min-h-[96px] p-1.5 transition-colors"
+                    style={{ backgroundColor: day.isCurrentMonth ? '#FFFCF7' : '#F3EFE6', zIndex: isHovered ? 30 : 1 }}
+                    onMouseEnter={() => day.events.length > 0 && setHoveredDayKey(dayKey)}
+                    onMouseLeave={() => setHoveredDayKey((current) => (current === dayKey ? null : current))}
+                  >
                     <div className="flex items-center justify-between mb-1">
-                      <span className={`text-xs font-medium ${isToday ? 'w-6 h-6 rounded-full flex items-center justify-center' : ''}`} style={{ color: day.isCurrentMonth ? (isToday ? '#FFF' : '#1A1A1A') : '#CCC', backgroundColor: isToday ? GOLD : 'transparent' }}>
+                      <span className={`text-xs font-medium ${isToday ? 'w-6 h-6 rounded-full flex items-center justify-center' : ''}`} style={{ color: isToday || day.isCurrentMonth ? '#3F3A34' : '#A39E93', backgroundColor: isToday ? GOLD : 'transparent' }}>
                         {day.date.getDate()}
                       </span>
+                      {day.events.length > 0 && !isHovered && (
+                        <span className="text-[9px] tabular-nums" style={{ color: '#8A8175' }}>{day.events.length}</span>
+                      )}
                     </div>
-                    <div className="space-y-0.5">
-                      {day.events.slice(0, 3).map(({ event: evt, isPadding }) => (
-                        <button
-                          key={evt.id}
-                          onClick={() => onOpenEvent(evt.id)}
-                          className="w-full text-left px-1.5 py-0.5 rounded text-[9px] truncate transition-colors hover:opacity-80"
-                          style={
-                            isPadding
-                              ? { backgroundColor: 'transparent', color: '#8B8478', border: '1px dashed rgba(139,132,120,0.35)' }
-                              : { backgroundColor: 'rgba(201,162,74,0.1)', color: GOLD }
-                          }
-                          title={`${getEventDisplayName(evt)}${isPadding ? ' (venue setup/strike)' : ''}`}
-                        >
-                          {getEventDisplayName(evt)}
-                        </button>
-                      ))}
-                      {day.events.length > 3 && <span className="text-[8px] text-gray-400 pl-1">+{day.events.length - 3} more</span>}
-                    </div>
+                    {!isHovered && (
+                      <div className="space-y-1">
+                        {day.events.slice(0, 2).map(({ event: evt, isPadding }) => (
+                          <button
+                            key={evt.id}
+                            type="button"
+                            onClick={() => onOpenEvent(evt.id)}
+                            className="w-full text-left px-1.5 py-1.5 rounded-md text-[10px] font-medium leading-tight line-clamp-2"
+                            style={
+                              isPadding
+                                ? { backgroundColor: 'transparent', color: '#8A8175', border: '1px dashed #D4CFC6' }
+                                : {
+                                    backgroundColor: '#FBF8F3',
+                                    border: '1px solid #D4CFC6',
+                                    color: '#3F3A34',
+                                  }
+                            }
+                            title={`${getEventDisplayName(evt)}${isPadding ? ' (venue setup/strike)' : ''}`}
+                          >
+                            {getEventDisplayName(evt)}
+                          </button>
+                        ))}
+                        {day.events.length > 2 && (
+                          <span className="text-[9px] text-gray-400 pl-0.5">+{day.events.length - 2} more</span>
+                        )}
+                      </div>
+                    )}
+                    {isHovered && day.events.length > 0 && (
+                      <div
+                        className="absolute top-0 w-[240px] max-h-[320px] overflow-y-auto rounded-xl p-2 space-y-2 bg-white"
+                        style={{
+                          border: `1px solid ${CARD_BORDER}`,
+                          boxShadow: '0 12px 32px rgba(26,26,26,0.12)',
+                          left: alignRight ? 'auto' : 0,
+                          right: alignRight ? 0 : 'auto',
+                        }}
+                      >
+                        <div className="px-1 pb-1 text-[10px] uppercase tracking-wider text-gray-400">
+                          {day.date.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}
+                        </div>
+                        {day.events.map(({ event: evt }) => (
+                          <EventListCard
+                            key={evt.id}
+                            event={evt}
+                            summary={calculateSummary(evt.lineItems || [])}
+                            clientsById={clientsById}
+                            variant="compact"
+                            onOpen={onOpenEvent}
+                          />
+                        ))}
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -619,7 +836,7 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ onOpenEvent }) => {
                 <FileText className="w-12 h-12 mx-auto mb-4" style={{ color: '#DDD' }} />
                 <p className="text-gray-400 mb-4">No events yet</p>
                 <div className="flex items-center justify-center gap-3 flex-wrap">
-                  <button onClick={() => setShowCreate(true)} className="px-6 py-2.5 rounded-lg text-xs font-medium uppercase tracking-wider" style={{ backgroundColor: GOLD, color: '#FFF' }}>
+                  <button onClick={() => setShowCreate(true)} className="px-6 py-2.5 rounded-lg text-xs font-medium uppercase tracking-wider" style={{ backgroundColor: GOLD, color: 'var(--pt-on-primary, #FFF)' }}>
                     Create Your First Event
                   </button>
                   <button onClick={handleLoadDemo} className="flex items-center gap-1.5 px-5 py-2.5 rounded-lg text-xs font-medium uppercase tracking-wider border transition-all hover:shadow-sm" style={{ borderColor: 'rgba(201,162,74,0.3)', color: GOLD, backgroundColor: 'rgba(201,162,74,0.04)' }}>
@@ -629,92 +846,66 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ onOpenEvent }) => {
                 </div>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                {filtered.map((event) => {
-                  const summary = calculateSummary(event.lineItems);
-                  const countryObj = getCountryByCode(event.country || '');
-                  const locationParts = [event.venue, event.city, countryObj?.name].filter(Boolean);
-                  const displayName = getEventDisplayName(event);
-                  const programCount = (event.programs || []).length;
-                  const isMultiDay = event.endDate && event.endDate !== event.date;
-
-                  return (
-                    <div key={event.id} className="bg-white rounded-2xl border overflow-hidden transition-all hover:shadow-md group cursor-pointer" style={{ borderColor: 'rgba(201,162,74,0.15)' }} onClick={() => onOpenEvent(event.id)}>
-                      <div className="p-6">
-                        <div className="flex items-center justify-between mb-3">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full font-medium" style={{ backgroundColor: event.status === 'active' ? 'rgba(34,197,94,0.1)' : event.status === 'draft' ? 'rgba(0,0,0,0.04)' : 'rgba(201,162,74,0.1)', color: event.status === 'active' ? '#22C55E' : event.status === 'draft' ? '#999' : GOLD }}>
-                              {event.status}
-                            </span>
-                            {event.eventType && (
-                              <span className="text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full font-medium" style={{ backgroundColor: 'rgba(201,162,74,0.08)', color: GOLD }}>
-                                {EVENT_TYPE_LABELS[event.eventType] || event.eventType}
-                              </span>
-                            )}
-                            {programCount > 0 && (
-                              <span className="text-[10px] px-2 py-0.5 rounded-full font-medium flex items-center gap-0.5" style={{ backgroundColor: 'rgba(59,130,246,0.08)', color: '#3B82F6' }}>
-                                <Layers className="w-2.5 h-2.5" /> {programCount}
-                              </span>
-                            )}
-                          </div>
-                          <span className="text-[10px] text-gray-400">v{event.currentVersion}</span>
-                        </div>
-                        <h3 className="text-lg font-light mb-3 group-hover:opacity-80 transition-opacity" style={{ fontFamily: '"Playfair Display", Georgia, serif', color: '#1A1A1A' }}>
-                          {displayName}
-                        </h3>
-                        {event.clientAccountId && clientsById[event.clientAccountId] && (
-                          <div className="flex items-center gap-1.5 mb-2 text-[10px] text-gray-400">
-                            <User className="w-3 h-3" style={{ color: GOLD }} />
-                            <span>{getDbClientDisplayName(clientsById[event.clientAccountId])}</span>
-                          </div>
-                        )}
-                        <div className="space-y-2 mb-4">
-                          {event.date && (
-                            <div className="flex items-center gap-2 text-xs text-gray-500">
-                              <Calendar className="w-3.5 h-3.5" style={{ color: GOLD }} />
-                              {new Date(event.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
-                              {isMultiDay && <span className="text-gray-400"> -  {new Date(event.endDate!).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</span>}
-                            </div>
-                          )}
-                          {locationParts.length > 0 && (
-                            <div className="flex items-center gap-2 text-xs text-gray-500">
-                              <MapPin className="w-3.5 h-3.5" style={{ color: GOLD }} />
-                              {locationParts.join(', ')}
-                            </div>
-                          )}
-                          <div className="flex items-center gap-2 text-xs text-gray-500">
-                            <Users className="w-3.5 h-3.5" style={{ color: GOLD }} />
-                            {event.guestCount} guests
-                          </div>
-                        </div>
-                        <div className="h-px mb-3" style={{ backgroundColor: 'rgba(201,162,74,0.1)' }} />
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="text-gray-400">Client Price</span>
-                          <span className="font-semibold" style={{ color: '#1A1A1A' }}>{fmt(summary.totalClientPrice)}</span>
-                        </div>
-                        <div className="flex items-center justify-between text-xs mt-1">
-                          <span className="text-gray-400">Margin</span>
-                          <span className="font-medium" style={{ color: summary.marginWarning ? '#EF4444' : '#22C55E' }}>
-                            {summary.grossMarginPercent.toFixed(1)}%
-                          </span>
-                        </div>
+              <div className="space-y-8">
+                {recentEvents.length > 0 && (
+                  <section>
+                    <div className="flex items-end justify-between gap-3 mb-3 px-1">
+                      <div>
+                        <h2
+                          className="text-lg font-light"
+                          style={{ fontFamily: '"Playfair Display", Georgia, serif', color: '#1A1A1A' }}
+                        >
+                          Recently worked on
+                        </h2>
+                        <p className="text-xs text-gray-400 mt-0.5">
+                          Scroll sideways to pick up work you left
+                        </p>
                       </div>
-                      <div className="flex border-t" style={{ borderColor: 'rgba(201,162,74,0.1)' }} onClick={(e) => e.stopPropagation()}>
-                        <button onClick={() => handleSaveSingle(event)} disabled={isSaving} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs text-gray-400 hover:text-green-600 transition-colors disabled:opacity-40">
-                          <Cloud className="w-3 h-3" /> Save
-                        </button>
-                        <div className="w-px" style={{ backgroundColor: 'rgba(201,162,74,0.1)' }} />
-                        <button onClick={() => handleDuplicate(event.id, displayName)} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs text-gray-400 hover:text-gray-600 transition-colors">
-                          <Copy className="w-3 h-3" /> Duplicate
-                        </button>
-                        <div className="w-px" style={{ backgroundColor: 'rgba(201,162,74,0.1)' }} />
-                        <button onClick={() => handleDelete(event.id, displayName)} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs text-gray-400 hover:text-red-500 transition-colors">
-                          <Trash2 className="w-3 h-3" /> Delete
-                        </button>
-                      </div>
+                      <span className="text-[10px] text-gray-400 tabular-nums shrink-0">
+                        {recentEvents.length} recent
+                      </span>
                     </div>
-                  );
-                })}
+                    <div
+                      className="flex gap-4 overflow-x-auto pb-3 snap-x snap-mandatory -mx-1 px-1"
+                      style={{ scrollbarWidth: 'thin' }}
+                    >
+                      {recentEvents.map((event) => (
+                        <EventListCard
+                          key={`recent-${event.id}`}
+                          event={event}
+                          summary={calculateSummary(event.lineItems || [])}
+                          clientsById={clientsById}
+                          featured
+                          onOpen={onOpenEvent}
+                          onSave={handleSaveSingle}
+                          onDuplicate={handleDuplicate}
+                          onDelete={handleDelete}
+                          isSaving={isSaving}
+                        />
+                      ))}
+                    </div>
+                  </section>
+                )}
+
+                {remainingEvents.length > 0 && (
+                  <section>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 items-end">
+                      {remainingEvents.map((event) => (
+                        <EventListCard
+                          key={event.id}
+                          event={event}
+                          summary={calculateSummary(event.lineItems || [])}
+                          clientsById={clientsById}
+                          onOpen={onOpenEvent}
+                          onSave={handleSaveSingle}
+                          onDuplicate={handleDuplicate}
+                          onDelete={handleDelete}
+                          isSaving={isSaving}
+                        />
+                      ))}
+                    </div>
+                  </section>
+                )}
               </div>
             )}
           </>

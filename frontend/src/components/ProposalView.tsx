@@ -23,8 +23,9 @@ import { getCountryByCode } from '@/data/countries';
 import { calculateStagedTotals, fmtStaged } from '@/data/stagedTotals';
 import { getCurrencySymbol } from '@/data/countryConfig';
 import { DbClient, getClientById, getDbClientDisplayName } from '@/data/clientDbStore';
+import { themeStyle, usePageTheme } from '@/theme/pageTheme';
 
-const GOLD = '#C9A24A';
+const GOLD = 'var(--pt-primary, #C9A24A)';
 
 const MOMENT_COLORS: Record<string, string> = {
   welcome_drinks: '#D4AF5A',
@@ -306,6 +307,7 @@ const MomentCostSection: React.FC<MomentCostSectionProps> = ({
 /* ─── Main ProposalView ───────────────────────────────────────────────────── */
 
 const ProposalView: React.FC<ProposalViewProps> = ({ event, onBack }) => {
+  const pageTheme = usePageTheme('coordinator-proposal');
   const { calculateLineItem, getSpecsForItem } = useEventContext();
 
   const [clientAccount, setClientAccount] = useState<DbClient | null>(null);
@@ -363,13 +365,13 @@ const ProposalView: React.FC<ProposalViewProps> = ({ event, onBack }) => {
   const totalMomentSections = momentsWithItems.length + (unassignedItems.length > 0 ? 1 : 0);
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: '#F5F4F0' }}>
-      <div className="print:hidden sticky top-0 z-40 border-b" style={{ backgroundColor: '#FAFAF7', borderColor: 'rgba(201,162,74,0.15)' }}>
+    <div className="min-h-screen" style={themeStyle(pageTheme)}>
+      <div className="print:hidden sticky top-0 z-40 border-b" style={{ backgroundColor: 'var(--pt-surface, #FAFAF7)', borderColor: 'var(--pt-border, rgba(201,162,74,0.15))' }}>
         <div className="max-w-4xl mx-auto px-6 py-3 flex items-center justify-between">
           <button onClick={onBack} className="flex items-center gap-2 text-xs uppercase tracking-widest" style={{ color: GOLD }}>
             <ArrowLeft className="w-4 h-4" /> Back to Event
           </button>
-          <button onClick={handlePrint} className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium uppercase tracking-wider" style={{ backgroundColor: GOLD, color: '#FFF' }}>
+          <button onClick={handlePrint} className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium uppercase tracking-wider" style={{ backgroundColor: GOLD, color: 'var(--pt-on-primary, #FFF)' }}>
             <Printer className="w-3.5 h-3.5" /> Print / Export PDF
           </button>
         </div>

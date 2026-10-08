@@ -22,10 +22,10 @@ import CurrencySwitcher from './CurrencySwitcher';
 import GroupCodePanel from './GroupCodePanel';
 
 
-const GOLD = '#C9A24A';
+const GOLD = 'var(--pt-accent, #C9A24A)';
 
 const GoldDivider = () => (
-  <div className="h-px my-5" style={{ backgroundColor: 'rgba(201,162,74,0.15)' }} />
+  <div className="h-px my-6" style={{ backgroundColor: 'var(--pt-border, #D4CFC6)' }} />
 );
 
 const SubHeading: React.FC<{ children: React.ReactNode }> = ({ children }) => (
@@ -35,7 +35,7 @@ const SubHeading: React.FC<{ children: React.ReactNode }> = ({ children }) => (
 );
 
 const FieldLabel: React.FC<{ children: React.ReactNode; required?: boolean }> = ({ children, required }) => (
-  <label className="text-[10px] uppercase tracking-wider text-gray-400 block mb-1.5">
+  <label className="text-[10px] uppercase tracking-wider block mb-1.5" style={{ color: 'var(--pt-muted, #8A8175)' }}>
     {children}
     {required && <span className="text-red-400 ml-0.5">*</span>}
   </label>
@@ -393,7 +393,7 @@ const EventDetailsCard: React.FC<EventDetailsCardProps> = ({ event }) => {
   };
 
   return (
-    <div className="bg-white rounded-2xl border p-6" style={{ borderColor: 'rgba(201,162,74,0.15)' }}>
+    <div className="rounded-2xl border p-6" style={{ backgroundColor: 'var(--pt-surface, #FFFFFF)', borderColor: 'var(--pt-border, #D4CFC6)' }}>
 
       {/* ═══ A) EVENT DETAILS ═══ */}
       <SubHeading>Event Details</SubHeading>
@@ -506,9 +506,8 @@ const EventDetailsCard: React.FC<EventDetailsCardProps> = ({ event }) => {
         </div>
       </div>
 
-      <div className="mt-4">
-        <GroupCodePanel event={event} />
-      </div>
+      <GoldDivider />
+      <GroupCodePanel event={event} />
 
       {/* ═══ CORPORATE NAMING ═══ */}
       {isCorporate && (
@@ -612,7 +611,8 @@ const EventDetailsCard: React.FC<EventDetailsCardProps> = ({ event }) => {
       </div>
 
       {/* ─── Backup & Contingency Plans ─────────────────────────────── */}
-      <div className="mt-5 rounded-xl border p-4 space-y-3" style={{ borderColor: 'rgba(201,162,74,0.12)', backgroundColor: 'rgba(201,162,74,0.02)' }}>
+      <GoldDivider />
+      <div className="rounded-xl border p-4 space-y-3" style={{ borderColor: 'rgba(201,162,74,0.12)', backgroundColor: 'rgba(201,162,74,0.02)' }}>
         <div className="flex items-center gap-2 mb-1">
           <ShieldAlert className="w-3.5 h-3.5" style={{ color: GOLD }} />
           <h4 className="text-[10px] font-semibold uppercase tracking-[0.12em]" style={{ color: GOLD }}>Backup & Contingency Plans</h4>

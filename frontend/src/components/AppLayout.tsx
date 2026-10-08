@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useAppContext } from '@/contexts/AppContext';
 import { useEventContext } from '@/contexts/EventContext';
 import Header from './Header';
@@ -37,12 +37,25 @@ import EventDetail from './EventDetail';
 import ProposalView from './ProposalView';
 import UserProfile from './UserProfile';
 import ResetPasswordForm from './ResetPasswordForm';
+import ThemeStudio from './ThemeStudio';
 import { toast } from '@/components/ui/use-toast';
 
 
 const AppLayout: React.FC = () => {
   const { currentView, isLoading, user, selectedSupplierId, setCurrentView, isAuthenticated, isPasswordRecovery } = useAppContext();
   const { selectedEventId, selectedEvent, selectEvent } = useEventContext();
+
+  useEffect(() => {
+    if (currentView === 'coordinator-event' && !selectedEventId) {
+      setCurrentView('coordinator-dashboard');
+    } else if (currentView === 'coordinator-proposal' && !selectedEvent) {
+      setCurrentView('coordinator-dashboard');
+    } else if (currentView === 'event-detail' && !selectedEventId) {
+      setCurrentView('planner-dashboard');
+    } else if (currentView === 'event-proposal' && !selectedEvent) {
+      setCurrentView('planner-dashboard');
+    }
+  }, [currentView, selectedEventId, selectedEvent, setCurrentView]);
 
   // Auto-routing is now handled centrally in AppContext on session restore.
   // No need for sessionStorage hacks or useEffect auto-routing here.
@@ -89,6 +102,15 @@ const AppLayout: React.FC = () => {
 
   // ─── COORDINATOR VIEWS (cream background, no old header/footer) ───
 
+  if (currentView === 'theme-studio') {
+    return (
+      <>
+        <ThemeStudio />
+        <AuthModal />
+      </>
+    );
+  }
+
   if (currentView === 'coordinator-dashboard') {
     return (
       <>
@@ -100,8 +122,11 @@ const AppLayout: React.FC = () => {
 
   if (currentView === 'coordinator-event') {
     if (!selectedEventId) {
-      setCurrentView('coordinator-dashboard');
-      return null;
+      return (
+        <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#F5F4F0' }}>
+          <p className="text-sm text-gray-400">Returning to events...</p>
+        </div>
+      );
     }
     return (
       <>
@@ -117,8 +142,11 @@ const AppLayout: React.FC = () => {
 
   if (currentView === 'coordinator-proposal') {
     if (!selectedEvent) {
-      setCurrentView('coordinator-dashboard');
-      return null;
+      return (
+        <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#F5F4F0' }}>
+          <p className="text-sm text-gray-400">Returning to events...</p>
+        </div>
+      );
     }
     return (
       <>
@@ -149,8 +177,7 @@ const AppLayout: React.FC = () => {
         return <PlannerDashboard onOpenEvent={handleOpenEvent} />;
       case 'event-detail':
         if (!selectedEventId) {
-          setCurrentView('planner-dashboard');
-          return null;
+          return <div className="p-8 text-center text-gray-400 text-sm">Returning to events...</div>;
         }
         return (
           <EventDetail
@@ -161,8 +188,7 @@ const AppLayout: React.FC = () => {
         );
       case 'event-proposal':
         if (!selectedEvent) {
-          setCurrentView('planner-dashboard');
-          return null;
+          return <div className="p-8 text-center text-gray-400 text-sm">Returning to events...</div>;
         }
         return (
           <ProposalView

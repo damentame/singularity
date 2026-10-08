@@ -53,7 +53,7 @@ export interface Conversation {
   unreadCount: number;
 }
 
-export type ViewType = 'home' | 'browse' | 'search-providers' | 'supplier' | 'dashboard' | 'messages' | 'budget' | 'checklist' | 'guests' | 'seating' | 'weather' | 'accommodation' | 'supplier-upload' | 'wizard' | 'workbook' | 'moodboard' | 'service-provider-registration' | 'provider-dashboard' | 'planner-dashboard' | 'event-detail' | 'event-proposal' | 'role-selector' | 'coordinator-dashboard' | 'coordinator-event' | 'coordinator-proposal' | 'profile' | 'reset-password';
+export type ViewType = 'home' | 'browse' | 'search-providers' | 'supplier' | 'dashboard' | 'messages' | 'budget' | 'checklist' | 'guests' | 'seating' | 'weather' | 'accommodation' | 'supplier-upload' | 'wizard' | 'workbook' | 'moodboard' | 'service-provider-registration' | 'provider-dashboard' | 'planner-dashboard' | 'event-detail' | 'event-proposal' | 'role-selector' | 'coordinator-dashboard' | 'coordinator-event' | 'coordinator-proposal' | 'theme-studio' | 'profile' | 'reset-password';
 
 // Views that require the user to be authenticated.
 // Public views: home, browse, search-providers, supplier, reset-password
@@ -62,7 +62,7 @@ export const PROTECTED_VIEWS = new Set<ViewType>([
   'seating', 'weather', 'accommodation', 'supplier-upload', 'wizard',
   'workbook', 'moodboard', 'service-provider-registration', 'provider-dashboard',
   'planner-dashboard', 'event-detail', 'event-proposal',
-  'coordinator-dashboard', 'coordinator-event', 'coordinator-proposal',
+  'coordinator-dashboard', 'coordinator-event', 'coordinator-proposal', 'theme-studio',
 ]);
 
 // Service Provider Registration Data
@@ -406,16 +406,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // ─── Check session on mount ───
   useEffect(() => {
+    let cancelled = false;
+    // Never leave the app stuck on the loading screen if auth never resolves
+    const loadingTimeout = window.setTimeout(() => {
+      if (!cancelled) setIsLoading(false);
+    }, 8000);
+
     const checkSession = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
+        if (cancelled) return;
         if (session?.user) {
           const { data: profile } = await supabase
             .from('profiles')
             .select('*')
             .eq('id', session.user.id)
             .single();
-          
+          if (cancelled) return;
+
           const restoredUser = buildUserFromProfile(session.user, profile);
           setUser(restoredUser);
 
@@ -428,47 +436,52 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       } catch (error) {
         console.error('Session check error:', error);
       } finally {
-        setIsLoading(false);
+        if (!cancelled) setIsLoading(false);
+        window.clearTimeout(loadingTimeout);
       }
     };
 
     checkSession();
 
-    // Listen for auth state changes (login, logout, token refresh, password recovery)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+    // Do not await inside this callback — that deadlocks getSession() and freezes the UI
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'PASSWORD_RECOVERY') {
-        // User clicked the password reset link in their email
         setIsPasswordRecovery(true);
         setCurrentViewState('reset-password');
         if (session?.user) {
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', session.user.id)
-            .single();
-          setUser(buildUserFromProfile(session.user, profile));
+          const userId = session.user.id;
+          const sessionUser = session.user;
+          setTimeout(async () => {
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('*')
+              .eq('id', userId)
+              .single();
+            setUser(buildUserFromProfile(sessionUser, profile));
+          }, 0);
         }
         return;
       }
 
       if (event === 'SIGNED_IN' && session?.user) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', session.user.id)
-          .single();
-        
-        const newUser = buildUserFromProfile(session.user, profile);
-        setUser(newUser);
+        const userId = session.user.id;
+        const sessionUser = session.user;
+        setTimeout(async () => {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', userId)
+            .single();
 
-        // Close auth modal on sign-in
-        setShowAuthModalState(false);
+          const newUser = buildUserFromProfile(sessionUser, profile);
+          setUser(newUser);
+          setShowAuthModalState(false);
 
-        // Route to dashboard after fresh sign-in (not session restore)
-        if (hasAutoRouted.current) {
-          // This is a fresh login (not initial page load), route to dashboard
-          routeToRoleDashboard(newUser.role);
-        }
+          // Route to dashboard after fresh sign-in (not session restore)
+          if (hasAutoRouted.current) {
+            routeToRoleDashboard(newUser.role);
+          }
+        }, 0);
       } else if (event === 'SIGNED_OUT') {
         setUser(null);
         hasAutoRouted.current = false;
@@ -477,7 +490,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      cancelled = true;
+      window.clearTimeout(loadingTimeout);
+      subscription.unsubscribe();
+    };
   }, []);
 
   // Load wishlist from localStorage

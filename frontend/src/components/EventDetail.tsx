@@ -43,10 +43,11 @@ import SupplierQuoteComparison from './SupplierQuoteComparison';
 import ComplianceDocumentsTab from './ComplianceDocumentsTab';
 import ReceiptsTab from './ReceiptsTab';
 import { toast } from '@/components/ui/use-toast';
+import { themeStyle, usePageTheme } from '@/theme/pageTheme';
 import { useAppContext } from '@/contexts/AppContext';
 
 
-const GOLD = '#C9A24A';
+const GOLD = 'var(--pt-primary, #C9A24A)';
 
 type OperationsTab = 'sub-events' | 'timeline' | 'costing' | 'tasks' | 'shopping' | 'orders' | 'control-tower' | 'sourcing' | 'compare' | 'compliance' | 'receipts';
 
@@ -58,6 +59,7 @@ interface EventDetailProps {
 }
 
 const EventDetail: React.FC<EventDetailProps> = ({ eventId, onBack, onGenerateProposal }) => {
+  const pageTheme = usePageTheme('coordinator-event');
   const {
     events,
     calculateSummary,
@@ -244,7 +246,7 @@ const EventDetail: React.FC<EventDetailProps> = ({ eventId, onBack, onGeneratePr
 
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: '#F5F4F0' }}>
+    <div className="min-h-screen" style={themeStyle(pageTheme)}>
       <CoordinatorHeader
         title={getEventDisplayName(event)}
         onBack={onBack}
@@ -254,7 +256,10 @@ const EventDetail: React.FC<EventDetailProps> = ({ eventId, onBack, onGeneratePr
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex flex-col lg:flex-row gap-6">
           {/* Main Content */}
-          <div className="flex-1 min-w-0 space-y-6">
+          <div
+            className="flex-1 min-w-0 space-y-6 rounded-2xl p-4 sm:p-5"
+            style={{ border: '1px solid var(--pt-border, #D4CFC6)' }}
+          >
             {/* Client Profile */}
             <ClientProfilePanel event={event} onOpenEvent={handleOpenEvent} />
 
