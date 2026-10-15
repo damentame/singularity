@@ -16,7 +16,7 @@ import {
 import { getCurrencySymbol, formatCurrency } from '@/data/countryConfig';
 import { toast } from '@/components/ui/use-toast';
 import { useAppContext } from '@/contexts/AppContext';
-import { syncRFQBatch, syncBatchStatus } from '@/lib/rfqSupabaseSync';
+import { syncRFQBatch, syncBatchStatus, pullQuotesFromSupabase } from '@/lib/rfqSupabaseSync';
 import { getUnreadCountsByBatch } from '@/lib/rfqMessagesApi';
 import RFQMessageThread from './RFQMessageThread';
 
@@ -50,6 +50,15 @@ const RFQSourcingPanel: React.FC<RFQSourcingPanelProps> = ({ event, autoOpenBatc
     getUnreadCountsByBatch(user.id).then(setUnreadCounts);
   }, [user?.id, refreshKey]);
 
+  // Opening a thread pulls any submitted quote down from Supabase first, so the Approve
+  // banner reflects reality even if the coordinator hasn't separately visited the Compare
+  // tab (previously the only place that called pullQuotesFromSupabase).
+  const openMessageThread = async (batch: RFQBatch) => {
+    setMessageThreadBatch(batch);
+    const n = await pullQuotesFromSupabase(event.id);
+    if (n > 0) setRefreshKey(k => k + 1);
+  };
+
   // Only reacts to autoOpenBatchId itself (not `batches`, which gets a new
   // identity on every refresh) so closing the thread doesn't immediately
   // reopen it via the refreshKey bump in its onClose handler.
@@ -57,7 +66,7 @@ const RFQSourcingPanel: React.FC<RFQSourcingPanelProps> = ({ event, autoOpenBatc
     if (!autoOpenBatchId) return;
     setExpandedBatch(autoOpenBatchId);
     const batch = getBatchesForEvent(event.id).find(b => b.id === autoOpenBatchId);
-    if (batch) setMessageThreadBatch(batch);
+    if (batch) openMessageThread(batch);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoOpenBatchId]);
 
@@ -125,6 +134,8 @@ const RFQSourcingPanel: React.FC<RFQSourcingPanelProps> = ({ event, autoOpenBatc
       actor: 'Coordinator', timestamp: new Date().toISOString(),
     };
     updateEvent(event.id, { lineItems: updatedLineItems, activityLog: [...(event.activityLog || []), logEntry] });
+    if (user?.id) syncBatchStatus(batchId, 'ACCEPTED', user.id);
+    setMessageThreadBatch(prev => prev && prev.id === batchId ? { ...prev, status: 'ACCEPTED' } : prev);
     setRefreshKey(k => k + 1);
     toast({ title: 'Quote Accepted', description: `Prices locked into line items.` });
   };
@@ -258,7 +269,7 @@ const RFQSourcingPanel: React.FC<RFQSourcingPanelProps> = ({ event, autoOpenBatc
                       <button onClick={() => window.open(getPortalUrl(batch.portalToken), '_blank')} className="flex items-center gap-1 px-3 py-1.5 text-[10px] font-medium rounded-lg border" style={{ borderColor: 'rgba(201,162,74,0.3)', color: GOLD }}>
                         <ExternalLink className="w-3 h-3" /> Open Portal
                       </button>
-                      <button onClick={() => setMessageThreadBatch(batch)} className="relative flex items-center gap-1 px-3 py-1.5 text-[10px] font-medium rounded-lg border" style={{ borderColor: 'rgba(201,162,74,0.3)', color: GOLD }}>
+                      <button onClick={() => openMessageThread(batch)} className="relative flex items-center gap-1 px-3 py-1.5 text-[10px] font-medium rounded-lg border" style={{ borderColor: 'rgba(201,162,74,0.3)', color: GOLD }}>
                         <MessageCircle className="w-3 h-3" /> Messages
                         {unreadCounts[batch.id] > 0 && (
                           <span className="ml-0.5 flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full text-white text-[9px] font-bold" style={{ backgroundColor: '#EF4444' }}>
@@ -374,15 +385,22 @@ const RFQSourcingPanel: React.FC<RFQSourcingPanelProps> = ({ event, autoOpenBatc
       })()}
 
       {/* Message Thread */}
-      {messageThreadBatch && (
-        <RFQMessageThread
-          mode="coordinator"
-          batchId={messageThreadBatch.id}
-          supplierName={messageThreadBatch.supplierName}
-          senderName={user?.name || 'Coordinator'}
-          onClose={() => { setMessageThreadBatch(null); setRefreshKey(k => k + 1); }}
-        />
-      )}
+      {messageThreadBatch && (() => {
+        const canApprove = messageThreadBatch.status === 'QUOTED' || messageThreadBatch.status === 'REVISED';
+        const latest = canApprove ? getLatestSubmitted(messageThreadBatch.id) : null;
+        return (
+          <RFQMessageThread
+            mode="coordinator"
+            batchId={messageThreadBatch.id}
+            supplierName={messageThreadBatch.supplierName}
+            senderName={user?.name || 'Coordinator'}
+            pendingQuote={latest ? { versionNumber: latest.versionNumber, totals: latest.totals } : null}
+            currencySymbol={currSym}
+            onApproveQuote={() => handleAccept(messageThreadBatch.id)}
+            onClose={() => { setMessageThreadBatch(null); setRefreshKey(k => k + 1); }}
+          />
+        );
+      })()}
     </div>
   );
 };

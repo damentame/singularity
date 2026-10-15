@@ -1,14 +1,20 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { X, Send, Loader2, MessageCircle } from 'lucide-react';
+import { X, Send, Loader2, MessageCircle, Check } from 'lucide-react';
 import {
   RFQThreadMessage,
   getMessagesForBatch, sendCoordinatorMessage, markMessagesReadByCoordinator,
   getPortalMessages, postPortalMessage, markPortalMessagesRead,
+  sendSystemMessage,
 } from '@/lib/rfqMessagesApi';
 import { toast } from '@/components/ui/use-toast';
 
 const GOLD = '#C9A24A';
 const POLL_INTERVAL_MS = 5000;
+
+export interface PendingQuoteSummary {
+  versionNumber: number;
+  totals: { net: number; vat: number; gross: number };
+}
 
 interface RFQMessageThreadProps {
   mode: 'coordinator' | 'supplier';
@@ -17,16 +23,24 @@ interface RFQMessageThreadProps {
   senderName: string;    // display name attached to messages this viewer sends
   supplierName: string;  // header label (coordinator mode)
   onClose: () => void;
+  // v17: coordinator-only - lets a submitted quote be approved (or adjustments requested)
+  // directly from the thread, instead of only from the Sourcing tab's batch list.
+  pendingQuote?: PendingQuoteSummary | null;
+  currencySymbol?: string;
+  onApproveQuote?: () => void;
 }
 
 const RFQMessageThread: React.FC<RFQMessageThreadProps> = ({
   mode, batchId, portalToken, senderName, supplierName, onClose,
+  pendingQuote, currencySymbol = '', onApproveQuote,
 }) => {
   const [messages, setMessages] = useState<RFQThreadMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
+  const [approving, setApproving] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -70,6 +84,24 @@ const RFQMessageThread: React.FC<RFQMessageThreadProps> = ({
     } finally {
       setSending(false);
     }
+  };
+
+  const handleApprove = async () => {
+    if (!pendingQuote || !batchId || approving) return;
+    setApproving(true);
+    try {
+      onApproveQuote?.();
+      const amount = pendingQuote.totals.gross.toLocaleString('en-ZA', { maximumFractionDigits: 0 });
+      const sent = await sendSystemMessage(batchId, `✅ Quote v${pendingQuote.versionNumber} approved — ${currencySymbol} ${amount} locked in.`);
+      if (sent) setMessages(prev => [...prev, sent]);
+    } finally {
+      setApproving(false);
+    }
+  };
+
+  const handleRequestAdjustments = () => {
+    setDraft(prev => prev || 'Could you please adjust: ');
+    textareaRef.current?.focus();
   };
 
   return (
@@ -144,9 +176,39 @@ const RFQMessageThread: React.FC<RFQMessageThreadProps> = ({
           )}
         </div>
 
+        {/* Pending Quote Approval (coordinator only) */}
+        {mode === 'coordinator' && pendingQuote && (
+          <div className="flex items-center justify-between gap-3 px-4 py-3 border-t flex-shrink-0" style={{ borderColor: 'rgba(201,162,74,0.12)', backgroundColor: 'rgba(201,162,74,0.05)' }}>
+            <div className="min-w-0">
+              <p className="text-[9px] font-semibold uppercase tracking-wider" style={{ color: GOLD }}>Awaiting Your Approval</p>
+              <p className="text-xs font-medium truncate" style={{ color: '#1A1A1A' }}>
+                v{pendingQuote.versionNumber} · {currencySymbol} {pendingQuote.totals.gross.toLocaleString('en-ZA', { maximumFractionDigits: 0 })}
+              </p>
+            </div>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <button
+                onClick={handleRequestAdjustments}
+                className="px-2.5 py-1.5 rounded-lg text-[10px] font-medium border transition-colors hover:shadow-sm"
+                style={{ borderColor: 'rgba(201,162,74,0.3)', color: GOLD }}
+              >
+                Request Adjustments
+              </button>
+              <button
+                onClick={handleApprove}
+                disabled={approving}
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-medium text-white disabled:opacity-50 transition-colors"
+                style={{ backgroundColor: '#22C55E' }}
+              >
+                {approving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />} Approve
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Composer */}
         <div className="flex items-end gap-2 px-4 py-3 border-t flex-shrink-0" style={{ borderColor: 'rgba(201,162,74,0.12)' }}>
           <textarea
+            ref={textareaRef}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
