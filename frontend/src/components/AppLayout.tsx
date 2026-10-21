@@ -41,9 +41,22 @@ import ThemeStudio from './ThemeStudio';
 import { toast } from '@/components/ui/use-toast';
 
 
+// Every one of these views renders PlannerDashboard/EventDetail/ProposalView/ThemeStudio,
+// which read the full shared EventContext (every event this browser knows about) with no
+// per-event ownership filtering of their own - they're built for the coordinator role only.
+const COORDINATOR_ONLY_VIEWS = new Set([
+  'theme-studio', 'coordinator-dashboard', 'coordinator-event', 'coordinator-proposal',
+  'planner-dashboard', 'event-detail', 'event-proposal',
+]);
+
 const AppLayout: React.FC = () => {
-  const { currentView, isLoading, user, selectedSupplierId, setCurrentView, isAuthenticated, isPasswordRecovery } = useAppContext();
+  const { currentView, isLoading, user, selectedSupplierId, setCurrentView, isAuthenticated, isPasswordRecovery, routeToRoleDashboard } = useAppContext();
   const { selectedEventId, selectedEvent, selectEvent } = useEventContext();
+
+  // A non-coordinator (host/supplier) must never reach these views, however `currentView`
+  // got set to one - stale state from before a role switch, a direct nav, etc. - since doing
+  // so would render every event in the shared EventContext, not just ones that belong to them.
+  const roleBlocksCoordinatorView = isAuthenticated && !!user && COORDINATOR_ONLY_VIEWS.has(currentView) && user.role !== 'coordinator';
 
   useEffect(() => {
     if (currentView === 'coordinator-event' && !selectedEventId) {
@@ -54,8 +67,10 @@ const AppLayout: React.FC = () => {
       setCurrentView('planner-dashboard');
     } else if (currentView === 'event-proposal' && !selectedEvent) {
       setCurrentView('planner-dashboard');
+    } else if (roleBlocksCoordinatorView) {
+      routeToRoleDashboard(user!.role);
     }
-  }, [currentView, selectedEventId, selectedEvent, setCurrentView]);
+  }, [currentView, selectedEventId, selectedEvent, setCurrentView, roleBlocksCoordinatorView, user, routeToRoleDashboard]);
 
   // Auto-routing is now handled centrally in AppContext on session restore.
   // No need for sessionStorage hacks or useEffect auto-routing here.
@@ -99,6 +114,18 @@ const AppLayout: React.FC = () => {
     selectEvent(eventId);
     setCurrentView('coordinator-event');
   };
+
+  // The redirect above only fires once the effect runs after this render commits - that's
+  // too late to stop PlannerDashboard/EventDetail from mounting (and fetching/rendering every
+  // event) for at least one frame. Block the render itself here instead; the effect still runs
+  // to actually move currentView on to wherever this user's role does belong.
+  if (roleBlocksCoordinatorView) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#FAFAF7' }}>
+        <p className="text-sm text-gray-400">Redirecting...</p>
+      </div>
+    );
+  }
 
   // ─── COORDINATOR VIEWS (cream background, no old header/footer) ───
 
