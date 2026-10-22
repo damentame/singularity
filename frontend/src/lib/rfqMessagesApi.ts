@@ -50,6 +50,40 @@ export async function sendCoordinatorMessage(
   return rowToMessage(data);
 }
 
+/** Authenticated-supplier equivalent of sendCoordinatorMessage - same table, RLS (email-matched to
+ *  the batch's supplier_email) decides whether this insert is allowed, not this function. */
+export async function sendSupplierMessage(
+  batchId: string,
+  body: string,
+  senderName: string,
+): Promise<RFQThreadMessage | null> {
+  const { data, error } = await supabase
+    .from('rfq_messages')
+    .insert({
+      id: `rfqm-${crypto.randomUUID()}`,
+      rfq_batch_id: batchId,
+      sender_type: 'supplier',
+      sender_name: senderName,
+      body,
+    })
+    .select()
+    .single();
+
+  if (error) { console.error('sendSupplierMessage error:', error); return null; }
+  return rowToMessage(data);
+}
+
+export async function markMessagesReadBySupplier(batchId: string): Promise<void> {
+  const { error } = await supabase
+    .from('rfq_messages')
+    .update({ read_by_supplier: true })
+    .eq('rfq_batch_id', batchId)
+    .in('sender_type', ['coordinator', 'system'])
+    .eq('read_by_supplier', false);
+
+  if (error) console.warn('markMessagesReadBySupplier failed:', error);
+}
+
 /** Auto-posted notice (e.g. a load-in/load-out time) - rendered distinctly from a hand-typed coordinator message. */
 export async function sendSystemMessage(batchId: string, body: string): Promise<RFQThreadMessage | null> {
   const { data, error } = await supabase

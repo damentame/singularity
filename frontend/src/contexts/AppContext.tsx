@@ -53,12 +53,12 @@ export interface Conversation {
   unreadCount: number;
 }
 
-export type ViewType = 'home' | 'browse' | 'search-providers' | 'supplier' | 'dashboard' | 'messages' | 'budget' | 'checklist' | 'guests' | 'seating' | 'weather' | 'accommodation' | 'supplier-upload' | 'wizard' | 'workbook' | 'moodboard' | 'service-provider-registration' | 'provider-dashboard' | 'planner-dashboard' | 'event-detail' | 'event-proposal' | 'role-selector' | 'coordinator-dashboard' | 'coordinator-event' | 'coordinator-proposal' | 'theme-studio' | 'profile' | 'reset-password';
+export type ViewType = 'home' | 'browse' | 'search-providers' | 'supplier' | 'dashboard' | 'budget' | 'checklist' | 'guests' | 'seating' | 'weather' | 'accommodation' | 'supplier-upload' | 'wizard' | 'workbook' | 'moodboard' | 'service-provider-registration' | 'provider-dashboard' | 'planner-dashboard' | 'event-detail' | 'event-proposal' | 'role-selector' | 'coordinator-dashboard' | 'coordinator-event' | 'coordinator-proposal' | 'theme-studio' | 'profile' | 'reset-password';
 
 // Views that require the user to be authenticated.
 // Public views: home, browse, search-providers, supplier, reset-password
 export const PROTECTED_VIEWS = new Set<ViewType>([
-  'profile', 'messages', 'dashboard', 'budget', 'checklist', 'guests',
+  'profile', 'dashboard', 'budget', 'checklist', 'guests',
   'seating', 'weather', 'accommodation', 'supplier-upload', 'wizard',
   'workbook', 'moodboard', 'service-provider-registration', 'provider-dashboard',
   'planner-dashboard', 'event-detail', 'event-proposal',

@@ -4,6 +4,7 @@ import {
   RFQThreadMessage,
   getMessagesForBatch, sendCoordinatorMessage, markMessagesReadByCoordinator,
   getPortalMessages, postPortalMessage, markPortalMessagesRead,
+  sendSupplierMessage, markMessagesReadBySupplier,
   sendSystemMessage,
 } from '@/lib/rfqMessagesApi';
 import { toast } from '@/components/ui/use-toast';
@@ -18,8 +19,8 @@ export interface PendingQuoteSummary {
 
 interface RFQMessageThreadProps {
   mode: 'coordinator' | 'supplier';
-  batchId?: string;      // required in coordinator mode
-  portalToken?: string;  // required in supplier mode
+  batchId?: string;      // required in coordinator mode, or in supplier mode for an authenticated supplier
+  portalToken?: string;  // supplier mode, anonymous (no account) path - omit when using batchId instead
   senderName: string;    // display name attached to messages this viewer sends
   supplierName: string;  // header label (coordinator mode)
   onClose: () => void;
@@ -48,13 +49,16 @@ const RFQMessageThread: React.FC<RFQMessageThreadProps> = ({
     const load = async (markRead: boolean) => {
       const msgs = mode === 'coordinator'
         ? (batchId ? await getMessagesForBatch(batchId) : [])
-        : (portalToken ? await getPortalMessages(portalToken) : []);
+        : portalToken
+          ? await getPortalMessages(portalToken)
+          : (batchId ? await getMessagesForBatch(batchId) : []); // authenticated supplier - RLS scopes this, not this call
       if (cancelled) return;
       setMessages(msgs);
       setLoading(false);
       if (markRead) {
         if (mode === 'coordinator' && batchId) markMessagesReadByCoordinator(batchId);
         if (mode === 'supplier' && portalToken) markPortalMessagesRead(portalToken);
+        if (mode === 'supplier' && !portalToken && batchId) markMessagesReadBySupplier(batchId);
       }
     };
 
@@ -74,7 +78,9 @@ const RFQMessageThread: React.FC<RFQMessageThreadProps> = ({
     try {
       const sent = mode === 'coordinator'
         ? (batchId ? await sendCoordinatorMessage(batchId, body, senderName) : null)
-        : (portalToken ? await postPortalMessage(portalToken, body) : null);
+        : portalToken
+          ? await postPortalMessage(portalToken, body)
+          : (batchId ? await sendSupplierMessage(batchId, body, senderName) : null);
       if (sent) {
         setMessages(prev => [...prev, sent]);
         setDraft('');

@@ -18,7 +18,6 @@ import GuestList from './GuestList';
 import SeatingChart from './SeatingChart';
 import PlanningChecklist from './PlanningChecklist';
 import BudgetTracker from './BudgetTracker';
-import MessagesCenter from './MessagesCenter';
 import WeatherForecast from './WeatherForecast';
 import Accommodation from './Accommodation';
 import VoiceAssistant from './VoiceAssistant';
@@ -30,7 +29,7 @@ import RoleBanner from './RoleBanner';
 import SupplierDetailsPanel from './SupplierDetailsPanel';
 import MoodBoardBuilder from './MoodBoardBuilder';
 import ServiceProviderWizard from './ServiceProviderWizard';
-import ServiceProviderDashboard from './ServiceProviderDashboard';
+import SupplierShell from './supplier/SupplierShell';
 import SearchProviders from './SearchProviders';
 import PlannerDashboard from './PlannerDashboard';
 import EventDetail from './EventDetail';
@@ -231,8 +230,6 @@ const AppLayout: React.FC = () => {
         return <PlanningChecklist />;
       case 'budget':
         return <BudgetTracker />;
-      case 'messages':
-        return <MessagesCenter />;
       case 'weather':
         return <WeatherForecast />;
       case 'accommodation':
@@ -271,7 +268,7 @@ const AppLayout: React.FC = () => {
           />
         );
       case 'provider-dashboard':
-        return <ServiceProviderDashboard />;
+        return <SupplierShell />;
       case 'supplier-details' as any:
         return (
           <div className="min-h-screen pt-24 pb-16" style={{ backgroundColor: '#0B1426' }}>
