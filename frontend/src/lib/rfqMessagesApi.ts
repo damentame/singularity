@@ -84,6 +84,25 @@ export async function markMessagesReadBySupplier(batchId: string): Promise<void>
   if (error) console.warn('markMessagesReadBySupplier failed:', error);
 }
 
+/** Unread (coordinator/system-authored, unread-by-supplier) message counts, keyed by batch id,
+ *  for every batch belonging to the currently-authenticated supplier. RLS (not this query) scopes
+ *  which rows come back, same convention as the rest of the authenticated-supplier API surface. */
+export async function getUnreadCountsForSupplier(): Promise<Record<string, number>> {
+  const { data, error } = await supabase
+    .from('rfq_messages')
+    .select('rfq_batch_id')
+    .in('sender_type', ['coordinator', 'system'])
+    .eq('read_by_supplier', false);
+
+  if (error) { console.error('getUnreadCountsForSupplier error:', error); return {}; }
+
+  const counts: Record<string, number> = {};
+  for (const row of data || []) {
+    counts[row.rfq_batch_id] = (counts[row.rfq_batch_id] || 0) + 1;
+  }
+  return counts;
+}
+
 /** Auto-posted notice (e.g. a load-in/load-out time) - rendered distinctly from a hand-typed coordinator message. */
 export async function sendSystemMessage(batchId: string, body: string): Promise<RFQThreadMessage | null> {
   const { data, error } = await supabase

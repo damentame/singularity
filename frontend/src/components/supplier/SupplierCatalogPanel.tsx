@@ -6,10 +6,19 @@ import {
   updateSpecialRequestsSettings, SupplierProduct, CreateProductInput,
 } from '@/lib/supplierProductsApi';
 import { uploadPortfolioImage } from '@/lib/portfolioUpload';
-import { getCurrencySymbol } from '@/data/countryConfig';
+import { getCurrencySymbol, COUNTRY_FINANCE_CONFIGS } from '@/data/countryConfig';
 import { useAppContext } from '@/contexts/AppContext';
 import { toast } from '@/components/ui/use-toast';
 import SupplierPhotosPanel from './SupplierPhotosPanel';
+import {
+  AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogAction, AlertDialogCancel,
+} from '@/components/ui/alert-dialog';
+
+// Deduped from the app's own per-country finance config, rather than a separate hardcoded list.
+const CURRENCY_OPTIONS = Array.from(
+  new Map(COUNTRY_FINANCE_CONFIGS.map(c => [c.currencyIso, c.currencySymbol])).entries()
+);
 
 const GOLD = '#C9A24A';
 
@@ -40,6 +49,7 @@ const SupplierCatalogPanel: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
+  const [confirmDeleteTarget, setConfirmDeleteTarget] = useState<SupplierProduct | null>(null);
 
   const [acceptsSpecialRequests, setAcceptsSpecialRequests] = useState(false);
   const [specialRequestNotes, setSpecialRequestNotes] = useState('');
@@ -118,8 +128,12 @@ const SupplierCatalogPanel: React.FC = () => {
     }
   };
 
-  const handleDelete = async (product: SupplierProduct) => {
-    if (!confirm(`Remove "${product.name}" from your catalog?`)) return;
+  const handleDelete = (product: SupplierProduct) => setConfirmDeleteTarget(product);
+
+  const performDelete = async () => {
+    const product = confirmDeleteTarget;
+    if (!product) return;
+    setConfirmDeleteTarget(null);
     const ok = await deleteProduct(product.id);
     if (ok) {
       toast({ title: 'Product removed' });
@@ -235,11 +249,19 @@ const SupplierCatalogPanel: React.FC = () => {
                 value={form.category} onChange={e => setForm({ ...form, category: e.target.value })}
                 placeholder="Category" className="px-3 py-2 text-xs border rounded-lg bg-white" style={{ borderColor: 'rgba(201,162,74,0.2)' }}
               />
-              <input
-                type="number" min="0" step="0.01" value={form.unitPrice || ''}
-                onChange={e => setForm({ ...form, unitPrice: parseFloat(e.target.value) || 0 })}
-                placeholder="Price" className="px-3 py-2 text-xs border rounded-lg bg-white" style={{ borderColor: 'rgba(201,162,74,0.2)' }}
-              />
+              <div className="flex">
+                <select
+                  value={form.currency} onChange={e => setForm({ ...form, currency: e.target.value })}
+                  className="px-1.5 py-2 text-xs border rounded-l-lg bg-white border-r-0 flex-shrink-0" style={{ borderColor: 'rgba(201,162,74,0.2)' }}
+                >
+                  {CURRENCY_OPTIONS.map(([iso]) => <option key={iso} value={iso}>{iso}</option>)}
+                </select>
+                <input
+                  type="number" min="0" step="0.01" value={form.unitPrice || ''}
+                  onChange={e => setForm({ ...form, unitPrice: parseFloat(e.target.value) || 0 })}
+                  placeholder="Price" className="w-full px-3 py-2 text-xs border rounded-r-lg bg-white" style={{ borderColor: 'rgba(201,162,74,0.2)' }}
+                />
+              </div>
               <input
                 type="number" min="0" value={form.quantityAvailable ?? ''}
                 onChange={e => setForm({ ...form, quantityAvailable: e.target.value === '' ? null : parseInt(e.target.value, 10) })}
@@ -288,6 +310,21 @@ const SupplierCatalogPanel: React.FC = () => {
           Save
         </button>
       </div>
+
+      <AlertDialog open={!!confirmDeleteTarget} onOpenChange={(open) => { if (!open) setConfirmDeleteTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove product?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmDeleteTarget && `"${confirmDeleteTarget.name}" will be removed from your catalog. This can't be undone.`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={performDelete} className="bg-red-500 hover:bg-red-600">Remove</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

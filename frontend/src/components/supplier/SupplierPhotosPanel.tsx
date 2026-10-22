@@ -6,6 +6,10 @@ import {
 } from '@/lib/portfolioUpload';
 import { useAppContext } from '@/contexts/AppContext';
 import { toast } from '@/components/ui/use-toast';
+import {
+  AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogAction, AlertDialogCancel,
+} from '@/components/ui/alert-dialog';
 
 const GOLD = '#C9A24A';
 
@@ -17,6 +21,7 @@ const SupplierPhotosPanel: React.FC = () => {
   const [uploading, setUploading] = useState(false);
   const [progressText, setProgressText] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [confirmRemoveUrl, setConfirmRemoveUrl] = useState<string | null>(null);
 
   const load = async () => {
     if (!user?.id) return;
@@ -61,8 +66,12 @@ const SupplierPhotosPanel: React.FC = () => {
     if (success) { setCoverUrlState(url); toast({ title: 'Cover photo updated' }); }
   };
 
-  const handleRemove = async (url: string) => {
-    if (!user?.id || !confirm('Remove this photo?')) return;
+  const handleRemove = (url: string) => setConfirmRemoveUrl(url);
+
+  const performRemove = async () => {
+    const url = confirmRemoveUrl;
+    setConfirmRemoveUrl(null);
+    if (!user?.id || !url) return;
     const { success, remainingUrls } = await removePortfolioUrl(user.id, url);
     if (success) {
       setUrls(remainingUrls);
@@ -119,6 +128,19 @@ const SupplierPhotosPanel: React.FC = () => {
           ))}
         </div>
       )}
+
+      <AlertDialog open={!!confirmRemoveUrl} onOpenChange={(open) => { if (!open) setConfirmRemoveUrl(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove this photo?</AlertDialogTitle>
+            <AlertDialogDescription>This can't be undone.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={performRemove} className="bg-red-500 hover:bg-red-600">Remove</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

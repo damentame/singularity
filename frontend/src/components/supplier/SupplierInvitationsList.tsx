@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { Package, ChevronRight, Loader2, Inbox } from 'lucide-react';
+import { Package, ChevronRight, Loader2, Inbox, MessageCircle } from 'lucide-react';
 import { getMyInvitations, SupplierInvitation } from '@/lib/supplierRfqApi';
+import { getUnreadCountsForSupplier } from '@/lib/rfqMessagesApi';
 import { RFQ_BATCH_STATUS_LABELS, RFQ_BATCH_STATUS_COLORS } from '@/contexts/EventContext';
 import { getCurrencySymbol } from '@/data/countryConfig';
 
@@ -15,11 +16,17 @@ const formatDate = (date: string) =>
 
 const SupplierInvitationsList: React.FC<SupplierInvitationsListProps> = ({ onOpen }) => {
   const [invitations, setInvitations] = useState<SupplierInvitation[]>([]);
+  const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
-    getMyInvitations().then(data => { if (!cancelled) { setInvitations(data); setLoading(false); } });
+    Promise.all([getMyInvitations(), getUnreadCountsForSupplier()]).then(([data, counts]) => {
+      if (cancelled) return;
+      setInvitations(data);
+      setUnreadCounts(counts);
+      setLoading(false);
+    });
     return () => { cancelled = true; };
   }, []);
 
@@ -47,6 +54,7 @@ const SupplierInvitationsList: React.FC<SupplierInvitationsListProps> = ({ onOpe
         const ctx = batch.eventContext || {};
         const sym = getCurrencySymbol(ctx.currency || 'ZAR');
         const needsResponse = !batch.invitationResponse;
+        const unread = unreadCounts[batch.id] || 0;
 
         return (
           <button
@@ -72,6 +80,11 @@ const SupplierInvitationsList: React.FC<SupplierInvitationsListProps> = ({ onOpe
                 {needsResponse && (
                   <span className="text-[9px] font-semibold px-2 py-0.5 rounded-full text-white flex-shrink-0" style={{ backgroundColor: '#EF4444' }}>
                     Needs response
+                  </span>
+                )}
+                {unread > 0 && (
+                  <span className="flex items-center gap-1 text-[9px] font-semibold px-2 py-0.5 rounded-full text-white flex-shrink-0" style={{ backgroundColor: GOLD }}>
+                    <MessageCircle className="w-2.5 h-2.5" /> {unread}
                   </span>
                 )}
               </div>

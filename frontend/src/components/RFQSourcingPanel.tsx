@@ -17,7 +17,7 @@ import { getCurrencySymbol, formatCurrency } from '@/data/countryConfig';
 import { toast } from '@/components/ui/use-toast';
 import { useAppContext } from '@/contexts/AppContext';
 import { syncRFQBatch, syncBatchStatus, pullQuotesFromSupabase } from '@/lib/rfqSupabaseSync';
-import { getUnreadCountsByBatch } from '@/lib/rfqMessagesApi';
+import { getUnreadCountsByBatch, sendSystemMessage } from '@/lib/rfqMessagesApi';
 import RFQMessageThread from './RFQMessageThread';
 
 const GOLD = '#C9A24A';
@@ -142,6 +142,8 @@ const RFQSourcingPanel: React.FC<RFQSourcingPanelProps> = ({ event, autoOpenBatc
 
   const handleCancel = (batchId: string) => {
     cancelBatch(batchId);
+    if (user?.id) syncBatchStatus(batchId, 'CANCELLED', user.id);
+    sendSystemMessage(batchId, '🚫 This request has been cancelled by the coordinator.');
     setRefreshKey(k => k + 1);
     toast({ title: 'RFQ Cancelled' });
   };

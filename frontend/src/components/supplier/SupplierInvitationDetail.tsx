@@ -187,6 +187,12 @@ const SupplierInvitationDetail: React.FC<SupplierInvitationDetailProps> = ({ bat
           </div>
         )}
 
+        {batch.status === 'CANCELLED' && (
+          <div className="mt-4 p-3 rounded-xl" style={{ backgroundColor: '#F3F4F6', border: '1px solid #E5E7EB' }}>
+            <p className="text-xs text-gray-600">This request has been cancelled by the coordinator - no further action is needed.</p>
+          </div>
+        )}
+
         <button
           type="button"
           onClick={() => setShowMessages(true)}
@@ -199,7 +205,7 @@ const SupplierInvitationDetail: React.FC<SupplierInvitationDetailProps> = ({ bat
         </button>
       </div>
 
-      {!batch.invitationResponse && (
+      {!batch.invitationResponse && batch.status !== 'CANCELLED' && (
         <div className="bg-white rounded-2xl border p-6" style={{ borderColor: 'rgba(201,162,74,0.15)' }}>
           <p className="text-xs text-gray-500 mb-3">Will you quote on this request?</p>
           <div className="flex gap-2">

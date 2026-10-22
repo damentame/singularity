@@ -2,11 +2,14 @@ import React, { useEffect, useState } from 'react';
 import { Inbox, Store, Loader2 } from 'lucide-react';
 import { useAppContext } from '@/contexts/AppContext';
 import { supabase } from '@/lib/supabase';
+import { getMyInvitations } from '@/lib/supplierRfqApi';
+import { getUnreadCountsForSupplier } from '@/lib/rfqMessagesApi';
 import SupplierInvitationsList from './SupplierInvitationsList';
 import SupplierInvitationDetail from './SupplierInvitationDetail';
 import SupplierCatalogPanel from './SupplierCatalogPanel';
 
 const GOLD = '#C9A24A';
+const BADGE_POLL_MS = 30000;
 
 type Tab = 'invitations' | 'catalog';
 
@@ -17,6 +20,7 @@ const SupplierShell: React.FC = () => {
   const [checkingProfile, setCheckingProfile] = useState(true);
   const [hasProfile, setHasProfile] = useState(false);
   const [businessName, setBusinessName] = useState('');
+  const [attentionCount, setAttentionCount] = useState(0);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -27,6 +31,23 @@ const SupplierShell: React.FC = () => {
         setCheckingProfile(false);
       });
   }, [user?.id]);
+
+  // "Things needing attention" badge on the My Invitations tab: unresponded invitations +
+  // unread coordinator/system messages. Refreshes on mount, periodically, and whenever the
+  // supplier returns from a detail view (where they may have just read messages or responded).
+  useEffect(() => {
+    if (!hasProfile) return;
+    const load = () => {
+      Promise.all([getMyInvitations(), getUnreadCountsForSupplier()]).then(([invitations, counts]) => {
+        const needsResponse = invitations.filter(i => !i.batch.invitationResponse).length;
+        const totalUnread = Object.values(counts).reduce((a, b) => a + b, 0);
+        setAttentionCount(needsResponse + totalUnread);
+      });
+    };
+    load();
+    const interval = setInterval(load, BADGE_POLL_MS);
+    return () => clearInterval(interval);
+  }, [hasProfile, selectedBatchId]);
 
   if (checkingProfile) {
     return (
@@ -84,6 +105,14 @@ const SupplierShell: React.FC = () => {
               }}
             >
               <t.icon className="w-3.5 h-3.5" /> {t.label}
+              {t.key === 'invitations' && attentionCount > 0 && (
+                <span
+                  className="flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full text-[9px] font-semibold text-white"
+                  style={{ backgroundColor: '#EF4444' }}
+                >
+                  {attentionCount}
+                </span>
+              )}
             </button>
           ))}
         </div>
