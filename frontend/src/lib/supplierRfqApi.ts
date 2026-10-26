@@ -60,9 +60,11 @@ export async function getMyInvitations(): Promise<SupplierInvitation[]> {
   return batches.map(row => ({ batch: rowToBatch(row), itemCount: counts[row.id] || 0 }));
 }
 
-/** Accept or decline an invitation to quote. Only ever touches invitation_response/
- *  invitation_responded_at (enforced server-side by the RPC, not just by convention). */
-export async function respondToInvitation(batchId: string, response: 'accepted' | 'declined'): Promise<boolean> {
+/** Accept, decline, or withdraw from an invitation to quote. Only ever touches
+ *  invitation_response/invitation_responded_at (enforced server-side by the RPC, not just by
+ *  convention). "Withdrawn" is distinct from "declined" - it means the supplier said yes
+ *  (and may have already quoted) before backing out, which coordinators care about differently. */
+export async function respondToInvitation(batchId: string, response: 'accepted' | 'declined' | 'withdrawn'): Promise<boolean> {
   const { error } = await supabase.rpc('supplier_respond_to_invitation', {
     p_batch_id: batchId,
     p_response: response,

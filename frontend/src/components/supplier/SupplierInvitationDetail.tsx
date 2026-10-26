@@ -8,6 +8,10 @@ import { getCurrencySymbol, formatCurrency } from '@/data/countryConfig';
 import { useAppContext } from '@/contexts/AppContext';
 import { toast } from '@/components/ui/use-toast';
 import RFQMessageThread from '@/components/RFQMessageThread';
+import {
+  AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogAction, AlertDialogCancel,
+} from '@/components/ui/alert-dialog';
 
 const GOLD = '#C9A24A';
 
@@ -39,6 +43,7 @@ const SupplierInvitationDetail: React.FC<SupplierInvitationDetailProps> = ({ bat
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
   const [showMessages, setShowMessages] = useState(false);
+  const [confirmWithdraw, setConfirmWithdraw] = useState(false);
 
   const load = async () => {
     const result = await getPortalDataForBatch(batchId);
@@ -88,6 +93,23 @@ const SupplierInvitationDetail: React.FC<SupplierInvitationDetailProps> = ({ bat
     const ok = await respondToInvitation(batchId, response);
     if (ok) {
       toast({ title: response === 'accepted' ? 'Invitation accepted' : 'Invitation declined' });
+      await load();
+    } else {
+      toast({ title: 'Something went wrong', variant: 'destructive' });
+    }
+    setResponding(false);
+  };
+
+  // Distinct from decline/undo above: withdrawing means the supplier already said yes (and may
+  // have already quoted), so unlike a plain accept/decline, the coordinator may be counting on
+  // this - worth an explicit chat notice, same as the coordinator-cancels-a-request notice.
+  const handleWithdraw = async () => {
+    setConfirmWithdraw(false);
+    setResponding(true);
+    const ok = await respondToInvitation(batchId, 'withdrawn');
+    if (ok) {
+      sendSystemMessage(batchId, '⚠️ The supplier has withdrawn from this request.');
+      toast({ title: 'Withdrawn', description: 'The coordinator has been notified in your chat thread.' });
       await load();
     } else {
       toast({ title: 'Something went wrong', variant: 'destructive' });
@@ -226,7 +248,7 @@ const SupplierInvitationDetail: React.FC<SupplierInvitationDetailProps> = ({ bat
         </div>
       )}
 
-      {batch.invitationResponse === 'declined' ? (
+      {batch.invitationResponse === 'declined' && (
         <div className="bg-white rounded-2xl border p-6 text-center" style={{ borderColor: 'rgba(201,162,74,0.15)' }}>
           <p className="text-xs text-gray-400">You declined this invitation.</p>
           <button
@@ -237,7 +259,24 @@ const SupplierInvitationDetail: React.FC<SupplierInvitationDetailProps> = ({ bat
             Changed your mind? Accept instead
           </button>
         </div>
-      ) : (
+      )}
+
+      {batch.invitationResponse === 'withdrawn' && (
+        <div className="bg-white rounded-2xl border p-6 text-center" style={{ borderColor: 'rgba(201,162,74,0.15)' }}>
+          <p className="text-xs text-gray-400">You withdrew from this request.</p>
+          {!isLocked && (
+            <button
+              type="button" disabled={responding} onClick={() => handleRespond('accepted')}
+              className="mt-3 text-xs font-medium disabled:opacity-50"
+              style={{ color: GOLD }}
+            >
+              Changed your mind? Resume quoting
+            </button>
+          )}
+        </div>
+      )}
+
+      {batch.invitationResponse === 'accepted' && (
         <div className="bg-white rounded-2xl border p-6" style={{ borderColor: 'rgba(201,162,74,0.15)' }}>
           <h3 className="text-[10px] font-semibold uppercase tracking-[0.15em] mb-4" style={{ color: GOLD }}>
             <Package className="w-3.5 h-3.5 inline mr-1.5" /> Items ({batchItems.length})
@@ -261,7 +300,7 @@ const SupplierInvitationDetail: React.FC<SupplierInvitationDetailProps> = ({ bat
                         value={p.unitPrice}
                         onChange={e => setPrices(prev => ({ ...prev, [bi.id]: { ...p, unitPrice: e.target.value } }))}
                         className="w-full px-2.5 py-1.5 text-xs border rounded-lg bg-white disabled:bg-gray-100"
-                        style={{ borderColor: 'rgba(201,162,74,0.2)' }}
+                        style={{ borderColor: 'rgba(201,162,74,0.2)', color: '#1A1A1A' }}
                       />
                     </div>
                     {batch.includeVatInfo && (
@@ -282,7 +321,7 @@ const SupplierInvitationDetail: React.FC<SupplierInvitationDetailProps> = ({ bat
                         value={p.leadTimeDays}
                         onChange={e => setPrices(prev => ({ ...prev, [bi.id]: { ...p, leadTimeDays: e.target.value } }))}
                         className="w-full px-2.5 py-1.5 text-xs border rounded-lg bg-white disabled:bg-gray-100"
-                        style={{ borderColor: 'rgba(201,162,74,0.2)' }}
+                        style={{ borderColor: 'rgba(201,162,74,0.2)', color: '#1A1A1A' }}
                       />
                     </div>
                     <div>
@@ -292,7 +331,7 @@ const SupplierInvitationDetail: React.FC<SupplierInvitationDetailProps> = ({ bat
                         value={p.availabilityNotes}
                         onChange={e => setPrices(prev => ({ ...prev, [bi.id]: { ...p, availabilityNotes: e.target.value } }))}
                         className="w-full px-2.5 py-1.5 text-xs border rounded-lg bg-white disabled:bg-gray-100"
-                        style={{ borderColor: 'rgba(201,162,74,0.2)' }}
+                        style={{ borderColor: 'rgba(201,162,74,0.2)', color: '#1A1A1A' }}
                       />
                     </div>
                   </div>
@@ -306,7 +345,7 @@ const SupplierInvitationDetail: React.FC<SupplierInvitationDetailProps> = ({ bat
             <textarea
               disabled={isLocked} value={notes} onChange={e => setNotes(e.target.value)} rows={2}
               className="w-full px-3 py-2 text-xs border rounded-lg bg-white resize-none disabled:bg-gray-100"
-              style={{ borderColor: 'rgba(201,162,74,0.2)' }}
+              style={{ borderColor: 'rgba(201,162,74,0.2)', color: '#1A1A1A' }}
             />
           </div>
 
@@ -338,6 +377,17 @@ const SupplierInvitationDetail: React.FC<SupplierInvitationDetailProps> = ({ bat
               </div>
             )}
           </div>
+
+          {!isLocked && (
+            <div className="mt-3 text-center">
+              <button
+                type="button" disabled={responding} onClick={() => setConfirmWithdraw(true)}
+                className="text-[10px] text-gray-400 hover:text-red-500 transition-colors"
+              >
+                Withdraw from this request
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -350,6 +400,21 @@ const SupplierInvitationDetail: React.FC<SupplierInvitationDetailProps> = ({ bat
           onClose={() => setShowMessages(false)}
         />
       )}
+
+      <AlertDialog open={confirmWithdraw} onOpenChange={setConfirmWithdraw}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Withdraw from this request?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The coordinator will be notified in your chat thread. You can resume quoting later if you change your mind.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleWithdraw} className="bg-red-500 hover:bg-red-600">Withdraw</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
