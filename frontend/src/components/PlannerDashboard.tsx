@@ -7,6 +7,8 @@ import { DbClient, fetchClients, migrateLocalClientsToDb } from '@/data/clientDb
 import CreateEventModal from './CreateEventModal';
 import CoordinatorHeader from './CoordinatorHeader';
 import EventListCard from './EventListCard';
+import EventGroupCard, { CalendarGroupBlock, GroupRibbonBar } from './EventGroupCard';
+import { collectEventGroups, groupClientTotal } from './eventGroups';
 import { toast } from '@/components/ui/use-toast';
 import { useAutoSaveStatus } from './EventAutoSaver';
 import ClientDirectory from './ClientDirectory';
@@ -59,6 +61,7 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ onOpenEvent }) => {
   const [calendarMonth, setCalendarMonth] = useState(() => new Date());
   const [calendarScale, setCalendarScale] = useState<'month' | 'year'>('year');
   const [hoveredDayKey, setHoveredDayKey] = useState<string | null>(null);
+  const [openCalendarGroups, setOpenCalendarGroups] = useState<Set<string>>(new Set());
   const yearScrollRef = useRef<HTMLDivElement>(null);
   const [loadingEventId, setLoadingEventId] = useState<string | null>(null);
 
@@ -95,6 +98,15 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ onOpenEvent }) => {
     });
   }, [filtered]);
 
+  const { groups: eventGroups, ungrouped: ungroupedEvents } = useMemo(
+    () => collectEventGroups(filtered),
+    [filtered],
+  );
+  const groupedIds = useMemo(
+    () => new Set(eventGroups.flatMap((group) => group.events.map((event) => event.id))),
+    [eventGroups],
+  );
+
   const { recentEvents, remainingEvents } = useMemo(() => {
     const byUpdated = [...filtered].sort((a, b) => {
       const aT = new Date(a.updatedAt || a.createdAt || 0).getTime();
@@ -106,9 +118,9 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ onOpenEvent }) => {
     const recentIds = new Set(recent.map((e) => e.id));
     return {
       recentEvents: recent,
-      remainingEvents: sortedFiltered.filter((e) => !recentIds.has(e.id)),
+      remainingEvents: sortedFiltered.filter((e) => !recentIds.has(e.id) && !groupedIds.has(e.id)),
     };
-  }, [filtered, sortedFiltered]);
+  }, [filtered, sortedFiltered, groupedIds]);
 
   // Load saved events when switching to saved tab
   useEffect(() => {
@@ -229,6 +241,17 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ onOpenEvent }) => {
     if (hrs < 24) return `${hrs}h ago`;
     return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
   };
+
+  const toggleCalendarGroup = (key: string) => {
+    setOpenCalendarGroups((current) => {
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const priceOf = (event: PlannerEvent) => calculateSummary(event.lineItems || []).totalClientPrice;
 
   // Calendar helpers
   interface CalendarDayEvent { event: PlannerEvent; isPadding: boolean }
@@ -708,16 +731,39 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ onOpenEvent }) => {
                       <p className="text-[11px] px-0.5" style={{ color: '#9A948A' }}>No events</p>
                     ) : (
                       <div className="space-y-2">
-                        {month.events.map((evt) => (
-                          <EventListCard
-                            key={evt.id}
-                            event={evt}
-                            summary={calculateSummary(evt.lineItems || [])}
-                            clientsById={clientsById}
-                            variant="compact"
-                            onOpen={onOpenEvent}
-                          />
-                        ))}
+                        {(() => {
+                          const { groups, ungrouped } = collectEventGroups(month.events);
+                          const rows = [
+                            ...groups.map((group) => ({ kind: 'group' as const, group, sort: group.anchor.date || '' })),
+                            ...ungrouped.map((event) => ({ kind: 'event' as const, event, sort: event.date || '' })),
+                          ].sort((a, b) => a.sort.localeCompare(b.sort));
+                          return rows.map((row) => {
+                            if (row.kind === 'event') {
+                              return (
+                                <EventListCard
+                                  key={row.event.id}
+                                  event={row.event}
+                                  summary={calculateSummary(row.event.lineItems || [])}
+                                  clientsById={clientsById}
+                                  variant="compact"
+                                  onOpen={onOpenEvent}
+                                />
+                              );
+                            }
+                            const key = `${calendarMonth.getFullYear()}-${month.month}-${row.group.code}`;
+                            return (
+                              <CalendarGroupBlock
+                                key={row.group.code}
+                                code={row.group.code}
+                                events={row.group.events}
+                                expanded={openCalendarGroups.has(key)}
+                                onToggle={() => toggleCalendarGroup(key)}
+                                onOpenGroup={() => onOpenEvent(row.group.anchor.id)}
+                                onOpenEvent={onOpenEvent}
+                              />
+                            );
+                          });
+                        })()}
                       </div>
                     )}
                   </div>
@@ -771,34 +817,52 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ onOpenEvent }) => {
                     </div>
                     {!isHovered && (
                       <div className="space-y-1">
-                        {day.events.slice(0, 2).map(({ event: evt, isPadding }) => (
-                          <button
-                            key={evt.id}
-                            type="button"
-                            onClick={() => onOpenEvent(evt.id)}
-                            className="w-full text-left px-1.5 py-1.5 rounded-md text-[10px] font-medium leading-tight line-clamp-2"
-                            style={
-                              isPadding
-                                ? { backgroundColor: 'transparent', color: '#8A8175', border: '1px dashed #D4CFC6' }
-                                : {
-                                    backgroundColor: '#FBF8F3',
-                                    border: '1px solid #D4CFC6',
-                                    color: '#3F3A34',
+                        {(() => {
+                          const { groups, ungrouped } = collectEventGroups(day.events.map((entry) => entry.event));
+                          const paddingById = new Map(day.events.map((entry) => [entry.event.id, entry.isPadding]));
+                          const chips = [
+                            ...groups.map((group) => ({ kind: 'group' as const, group })),
+                            ...ungrouped.map((event) => ({ kind: 'event' as const, event, isPadding: paddingById.get(event.id) ?? false })),
+                          ];
+                          return (
+                            <>
+                              {chips.slice(0, 2).map((chip) => chip.kind === 'group' ? (
+                                <div
+                                  key={chip.group.code}
+                                  className="w-full text-left px-1.5 py-1 rounded-md overflow-hidden"
+                                  style={{ backgroundColor: '#FBF8F3', border: '1px solid #C9A24A' }}
+                                  title={`${chip.group.code} · ${chip.group.events.length} quotes`}
+                                >
+                                  <span className="block text-[8px] font-semibold uppercase tracking-wider" style={{ color: '#8A6A2F' }}>Group</span>
+                                  <span className="block text-[10px] font-medium leading-tight truncate" style={{ color: '#3F3A34' }}>{chip.group.code}</span>
+                                </div>
+                              ) : (
+                                <button
+                                  key={chip.event.id}
+                                  type="button"
+                                  onClick={() => onOpenEvent(chip.event.id)}
+                                  className="w-full text-left px-1.5 py-1.5 rounded-md text-[10px] font-medium leading-tight line-clamp-2"
+                                  style={
+                                    chip.isPadding
+                                      ? { backgroundColor: 'transparent', color: '#8A8175', border: '1px dashed #D4CFC6' }
+                                      : { backgroundColor: '#FBF8F3', border: '1px solid #D4CFC6', color: '#3F3A34' }
                                   }
-                            }
-                            title={`${getEventDisplayName(evt)}${isPadding ? ' (venue setup/strike)' : ''}`}
-                          >
-                            {getEventDisplayName(evt)}
-                          </button>
-                        ))}
-                        {day.events.length > 2 && (
-                          <span className="text-[9px] text-gray-400 pl-0.5">+{day.events.length - 2} more</span>
-                        )}
+                                  title={`${getEventDisplayName(chip.event)}${chip.isPadding ? ' (venue setup/strike)' : ''}`}
+                                >
+                                  {getEventDisplayName(chip.event)}
+                                </button>
+                              ))}
+                              {chips.length > 2 && (
+                                <span className="text-[9px] text-gray-400 pl-0.5">+{chips.length - 2} more</span>
+                              )}
+                            </>
+                          );
+                        })()}
                       </div>
                     )}
                     {isHovered && day.events.length > 0 && (
                       <div
-                        className="absolute top-0 w-[240px] max-h-[320px] overflow-y-auto rounded-xl p-2 space-y-2 bg-white"
+                        className="absolute top-0 w-[260px] max-h-[360px] overflow-y-auto rounded-xl p-2 space-y-2 bg-white"
                         style={{
                           border: `1px solid ${CARD_BORDER}`,
                           boxShadow: '0 12px 32px rgba(26,26,26,0.12)',
@@ -809,16 +873,49 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ onOpenEvent }) => {
                         <div className="px-1 pb-1 text-[10px] uppercase tracking-wider text-gray-400">
                           {day.date.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}
                         </div>
-                        {day.events.map(({ event: evt }) => (
-                          <EventListCard
-                            key={evt.id}
-                            event={evt}
-                            summary={calculateSummary(evt.lineItems || [])}
-                            clientsById={clientsById}
-                            variant="compact"
-                            onOpen={onOpenEvent}
-                          />
-                        ))}
+                        {(() => {
+                          const { groups, ungrouped } = collectEventGroups(day.events.map((entry) => entry.event));
+                          return (
+                            <>
+                              {groups.map((group) => (
+                                <div key={group.code} className="rounded-xl overflow-hidden" style={{ border: '1px solid #E4D3A1' }}>
+                                  <GroupRibbonBar compact />
+                                  <div className="p-2 space-y-1.5">
+                                    <p className="px-0.5 text-xs font-mono font-semibold" style={{ color: '#1A1A1A' }}>{group.code}</p>
+                                    <button
+                                      type="button"
+                                      onClick={() => onOpenEvent(group.anchor.id)}
+                                      className="w-full py-1.5 rounded-lg text-[11px] font-medium"
+                                      style={{ backgroundColor: GOLD, color: 'var(--pt-on-primary, #1A1A1A)' }}
+                                    >
+                                      Open group quote
+                                    </button>
+                                    {group.events.map((evt) => (
+                                      <EventListCard
+                                        key={evt.id}
+                                        event={evt}
+                                        summary={calculateSummary(evt.lineItems || [])}
+                                        clientsById={clientsById}
+                                        variant="compact"
+                                        onOpen={onOpenEvent}
+                                      />
+                                    ))}
+                                  </div>
+                                </div>
+                              ))}
+                              {ungrouped.map((evt) => (
+                                <EventListCard
+                                  key={evt.id}
+                                  event={evt}
+                                  summary={calculateSummary(evt.lineItems || [])}
+                                  clientsById={clientsById}
+                                  variant="compact"
+                                  onOpen={onOpenEvent}
+                                />
+                              ))}
+                            </>
+                          );
+                        })()}
                       </div>
                     )}
                   </div>
@@ -884,6 +981,54 @@ const PlannerDashboard: React.FC<PlannerDashboardProps> = ({ onOpenEvent }) => {
                         />
                       ))}
                     </div>
+                  </section>
+                )}
+
+                {eventGroups.length > 0 && (
+                  <section className="space-y-4">
+                    <div className="px-1">
+                      <h2
+                        className="text-lg font-light"
+                        style={{ fontFamily: '"Playfair Display", Georgia, serif', color: '#1A1A1A' }}
+                      >
+                        Event groups
+                      </h2>
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        Each group sits on the left. Its quotes continue in one row to the right.
+                      </p>
+                    </div>
+                    {eventGroups.map((group) => {
+                      const total = groupClientTotal(group.events, priceOf);
+                      return (
+                        <div
+                          key={group.code}
+                          className="flex items-end gap-3 overflow-x-auto pb-3"
+                          style={{ scrollbarWidth: 'thin' }}
+                        >
+                          <EventGroupCard
+                            code={group.code}
+                            events={group.events}
+                            combinedTotal={total.total}
+                            onOpenGroup={() => onOpenEvent(group.anchor.id)}
+                          />
+                          <ChevronRight className="w-4 h-4 shrink-0 self-end mb-12" style={{ color: '#C9A24A' }} />
+                          {group.events.map((event) => (
+                            <EventListCard
+                              key={event.id}
+                              event={event}
+                              summary={calculateSummary(event.lineItems || [])}
+                              clientsById={clientsById}
+                              featured
+                              onOpen={onOpenEvent}
+                              onSave={handleSaveSingle}
+                              onDuplicate={handleDuplicate}
+                              onDelete={handleDelete}
+                              isSaving={isSaving}
+                            />
+                          ))}
+                        </div>
+                      );
+                    })}
                   </section>
                 )}
 
