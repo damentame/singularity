@@ -89,6 +89,8 @@ export const createRFQBatch = (
     messageToSupplier,
     includeVatInfo: true,
     includeMomentSpaceContext: true,
+    invitationResponse: '',
+    invitationRespondedAt: '',
   };
 
   // Create batch items from line items

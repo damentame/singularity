@@ -28,7 +28,11 @@ export interface IdDocumentRecord {
 /**
  * Upload a single ID document to the private supplier-id-documents bucket,
  * insert a record into supplier_id_documents, and flip service_providers
- * id_verification_status to 'pending'.
+ * id_verification_status to 'approved'.
+ *
+ * Suppliers are auto-approved for now - there's no admin review page yet to
+ * act on a 'pending' status, so setting it here would just strand them.
+ * Change this back to 'pending' once a real admin review flow exists.
  */
 export async function uploadIdDocument(
   file: File,
@@ -68,10 +72,10 @@ export async function uploadIdDocument(
       return { success: false, error: dbError.message };
     }
 
-    // Mark the provider's verification status as pending
+    // Auto-approved for now (see function comment) - real review comes with the admin pages.
     await supabase
       .from('service_providers')
-      .update({ id_verification_status: 'pending' })
+      .update({ id_verification_status: 'approved' })
       .eq('user_id', userId);
 
     return { success: true, record: data as IdDocumentRecord };

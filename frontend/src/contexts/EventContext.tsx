@@ -653,6 +653,8 @@ export interface RFQBatch {
   messageToSupplier: string;
   includeVatInfo: boolean;
   includeMomentSpaceContext: boolean;
+  invitationResponse: '' | 'accepted' | 'declined';  // v18: supplier's response to the invitation itself
+  invitationRespondedAt: string;
 }
 
 export interface RFQBatchItem {

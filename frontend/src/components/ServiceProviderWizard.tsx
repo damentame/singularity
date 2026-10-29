@@ -641,49 +641,49 @@ const ServiceProviderWizard: React.FC<ServiceProviderWizardProps> = ({ onClose, 
           console.error('Profile update error:', profileError);
         }
 
-        // Format phone numbers with dial codes
+        // Format phone numbers with dial codes. `service_providers` declares every one of
+        // these text columns `not null default ''` - an explicit null is a constraint
+        // violation, not a no-op, so "not applicable" maps to '' everywhere below.
+        const naOr = (isNA: boolean, value: string) => (isNA ? '' : (value || ''));
         const formattedContactPhone = formData.contactPhone && !naFields.contactPhone
           ? `${formData.contactPhoneDialCode}${formData.contactPhone.replace(/^0+/, '')}`
-          : null;
+          : '';
         const formattedAlternatePhone = formData.alternatePhone && !naFields.alternatePhone
           ? `${formData.alternatePhoneDialCode}${formData.alternatePhone.replace(/^0+/, '')}`
-          : null;
+          : '';
 
         const { data, error } = await supabase
           .from('service_providers')
           .insert({
             user_id: user.id,
             country: formData.country,
-            state: naFields.state ? null : (formData.state || null),
+            state: naOr(naFields.state, formData.state),
             city: formData.city,
-            postcode: naFields.postcode ? null : (formData.postcode || null),
-            service_radius: naFields.serviceRadius ? null : (formData.serviceRadius || null),
+            postcode: naOr(naFields.postcode, formData.postcode),
+            service_radius: naOr(naFields.serviceRadius, formData.serviceRadius),
             business_name: formData.businessName,
-            trading_name: naFields.tradingName ? null : (formData.tradingName || null),
-            registration_number: naFields.registrationNumber ? null : (formData.registrationNumber || null),
+            trading_name: naOr(naFields.tradingName, formData.tradingName),
+            registration_number: naOr(naFields.registrationNumber, formData.registrationNumber),
             business_type: formData.businessType,
-            years_in_operation: naFields.yearsInOperation ? null : (formData.yearsInOperation || null),
-            team_size: naFields.teamSize ? null : (formData.teamSize || null),
-            business_description: naFields.businessDescription ? null : (formData.businessDescription || null),
-            contact_name: naFields.contactName ? null : (formData.contactName || null),
-            contact_email: naFields.contactEmail ? null : (formData.contactEmail || null),
+            years_in_operation: naOr(naFields.yearsInOperation, formData.yearsInOperation),
+            team_size: naOr(naFields.teamSize, formData.teamSize),
+            business_description: naOr(naFields.businessDescription, formData.businessDescription),
+            contact_name: naOr(naFields.contactName, formData.contactName),
+            contact_email: naOr(naFields.contactEmail, formData.contactEmail),
             contact_phone: formattedContactPhone,
             alternate_phone: formattedAlternatePhone,
-            website: naFields.website ? null : (formData.website || null),
-            instagram: naFields.instagram ? null : (formData.instagram || null),
-            facebook: naFields.facebook ? null : (formData.facebook || null),
-            pinterest: naFields.pinterest ? null : (formData.pinterest || null),
-            tiktok: naFields.tiktok ? null : (formData.tiktok || null),
+            website: naOr(naFields.website, formData.website),
+            instagram: naOr(naFields.instagram, formData.instagram),
+            facebook: naOr(naFields.facebook, formData.facebook),
+            pinterest: naOr(naFields.pinterest, formData.pinterest),
+            tiktok: naOr(naFields.tiktok, formData.tiktok),
             selected_event_types: formData.selectedEventTypes,
             selected_categories: formData.selectedCategories,
             service_details: formData.serviceDetails,
             insurance_types: formData.insuranceTypes,
-            public_liability_amount: formData.publicLiabilityAmount || null,
-            policy_number: formData.policyNumber || null,
-            insurance_expiry_date: formData.expiryDate || null,
-            status: 'pending',
-            is_verified: false,
-            is_featured: false,
+            public_liability_amount: formData.publicLiabilityAmount || '',
+            policy_number: formData.policyNumber || '',
+            expiry_date: formData.expiryDate || '',
           })
           .select()
           .single();
@@ -753,7 +753,7 @@ const ServiceProviderWizard: React.FC<ServiceProviderWizardProps> = ({ onClose, 
           const result = await uploadIdDocument(idDocumentFile, user.id, idDocumentType);
           if (result.success) {
             setIdUploadStatus('uploaded');
-            toast({ title: 'ID Document Uploaded', description: 'Your identity document is pending review.' });
+            toast({ title: 'ID Document Uploaded', description: 'Your identity document has been uploaded to your profile.' });
           } else {
             setIdUploadStatus('error');
             toast({
@@ -778,9 +778,10 @@ const ServiceProviderWizard: React.FC<ServiceProviderWizardProps> = ({ onClose, 
 
       toast({
         title: 'Registration Successful!',
-        description: 'Your service provider profile has been created and is pending approval.',
+        description: 'Your service provider profile has been created and is now live.',
       });
 
+      return true;
 
     } catch (error: any) {
       console.error('Save error:', error);
@@ -958,8 +959,8 @@ const ServiceProviderWizard: React.FC<ServiceProviderWizardProps> = ({ onClose, 
           </p>
           
           <p className="text-white/50 mb-8" style={{ fontFamily: '"Inter", sans-serif' }}>
-            Your service provider profile has been created and is pending review. 
-            Our team will verify your details and activate your profile within 24-48 hours.
+            Your service provider profile is live. Coordinators can now invite you to quote
+            on their events, and you can start building your catalog right away.
           </p>
 
           {/* Summary cards */}
@@ -991,9 +992,9 @@ const ServiceProviderWizard: React.FC<ServiceProviderWizardProps> = ({ onClose, 
             </h3>
             <div className="space-y-3">
               {[
-                { step: '1', text: 'Our team reviews your profile and verifies your details' },
-                { step: '2', text: 'Your profile goes live and becomes visible to event planners' },
-                { step: '3', text: 'You start receiving quote requests and booking inquiries' },
+                { step: '1', text: 'Add your products, pricing and photos to your profile' },
+                { step: '2', text: 'Coordinators invite you to quote on events that match what you offer' },
+                { step: '3', text: 'Accept invitations, send quotes and chat with coordinators - all from your dashboard' },
               ].map((item) => (
                 <div key={item.step} className="flex items-start gap-3">
                   <div className="w-6 h-6 rounded-full bg-gold/20 text-gold flex items-center justify-center flex-shrink-0 text-xs font-bold">
@@ -2239,7 +2240,7 @@ const ServiceProviderWizard: React.FC<ServiceProviderWizardProps> = ({ onClose, 
                         )}
                         {idUploadStatus === 'uploaded' && (
                           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs bg-green-500/20 text-green-300">
-                            <Check className="w-3 h-3" /> Uploaded — pending review
+                            <Check className="w-3 h-3" /> Uploaded
                           </span>
                         )}
                         {idUploadStatus === 'error' && (

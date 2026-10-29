@@ -99,13 +99,6 @@ const getLocalResponse = (
     };
   }
   
-  if (text.includes('message') || text.includes('inbox') || text.includes('chat')) {
-    return {
-      response: "Opening your messages center where you can communicate with suppliers and manage all your event conversations.",
-      action: () => setTimeout(() => setCurrentView('messages'), 1000)
-    };
-  }
-  
   if (text.includes('dashboard') || text.includes('home') || text.includes('main')) {
     return {
       response: "Taking you to your dashboard where you can see an overview of your event planning progress.",

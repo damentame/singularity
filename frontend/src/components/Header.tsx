@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '@/contexts/AppContext';
-import { Menu, X, Heart, LogOut, MessageSquare, LayoutDashboard, ChevronDown, Briefcase, Home, UserCircle } from 'lucide-react';
+import { Menu, X, Heart, LogOut, LayoutDashboard, ChevronDown, Briefcase, Home, UserCircle } from 'lucide-react';
 
 const Header: React.FC = () => {
   const {
@@ -145,15 +145,6 @@ const Header: React.FC = () => {
                       {wishlist.length}
                     </span>
                   )}
-                </button>
-
-                {/* Messages */}
-                <button
-                  onClick={() => setCurrentView('messages')}
-                  className="p-2 hover:text-gold transition-colors"
-                  style={{ color: '#FFFFFF' }}
-                >
-                  <MessageSquare className="w-5 h-5" />
                 </button>
 
                 {/* User Menu */}

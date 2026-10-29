@@ -16,11 +16,10 @@ const Footer: React.FC = () => {
       { label: 'Planning Checklist', action: () => setCurrentView('checklist') },
       { label: 'Weather Forecast', action: () => setCurrentView('weather') },
       { label: 'Accommodation', action: () => setCurrentView('accommodation') },
-      { label: 'Messages', action: () => setCurrentView('messages') },
     ],
     forSuppliers: [
       { label: 'List Your Business', action: () => setCurrentView('service-provider-registration') },
-      { label: 'Supplier Dashboard', action: () => setCurrentView('dashboard') },
+      { label: 'Supplier Dashboard', action: () => setCurrentView('provider-dashboard') },
       { label: 'Success Stories', action: () => {} },
       { label: 'Partner Program', action: () => {} },
     ],

@@ -27,6 +27,7 @@ import { getCurrencySymbol, formatCurrency, calculateVatBreakdown } from '@/data
 import { supabase } from '@/lib/supabase';
 import SupplierPortalMomentSection, { ItemPriceEntry } from './SupplierPortalMomentSection';
 import RFQMessageThread from './RFQMessageThread';
+import { sendSystemMessage } from '@/lib/rfqMessagesApi';
 import { MessageCircle } from 'lucide-react';
 
 const GOLD = '#C9A24A';
@@ -231,6 +232,14 @@ const SupplierPortal: React.FC = () => {
           status: result.versionNumber > 1 ? 'REVISED' : 'QUOTED',
           currentSubmittedVersion: result.versionNumber,
         } : prev);
+
+        // Post the submission into the shared chat so the coordinator can approve or ask for
+        // adjustments right there - resubmitting (same Submit flow, a new version) is how an
+        // adjustment request gets answered, so no separate "revision" mechanism is needed.
+        const sym = getCurrencySymbol(event.currency || 'ZAR');
+        const verb = result.versionNumber > 1 ? `Revised quote submitted (v${result.versionNumber})` : 'Quote submitted';
+        const body = `📄 ${verb}: ${formatCurrency(result.totals.gross, sym)} total (net ${formatCurrency(result.totals.net, sym)} + ${event.vatName || 'VAT'} ${formatCurrency(result.totals.vat, sym)}).`;
+        sendSystemMessage(batch.id, body);
       }
     } else {
       // localStorage fallback

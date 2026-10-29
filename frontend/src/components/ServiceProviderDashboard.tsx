@@ -50,9 +50,7 @@ interface ServiceProvider {
   public_liability_amount: string;
   policy_number: string;
   insurance_expiry_date: string;
-  status: string;
-  is_verified: boolean;
-  is_featured: boolean;
+  is_active: boolean;
   created_at: string;
 }
 
@@ -595,18 +593,8 @@ const ServiceProviderDashboard: React.FC = () => {
               )}
             </div>
             <div className="flex items-center gap-3">
-              {provider.is_verified && (
-                <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30">
-                  <CheckCircle className="w-3 h-3 mr-1" /> Verified
-                </Badge>
-              )}
-              {provider.is_featured && (
-                <Badge className="bg-[#B8956A]/20 text-[#B8956A] border-[#B8956A]/30">
-                  <Star className="w-3 h-3 mr-1" /> Featured
-                </Badge>
-              )}
-              <Badge className={getStatusColor(provider.status)}>
-                {provider.status.charAt(0).toUpperCase() + provider.status.slice(1)}
+              <Badge className={provider.is_active ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-slate-500/20 text-slate-400 border-slate-500/30'}>
+                {provider.is_active ? 'Active' : 'Inactive'}
               </Badge>
             </div>
           </div>
