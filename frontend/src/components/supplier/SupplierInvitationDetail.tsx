@@ -276,7 +276,26 @@ const SupplierInvitationDetail: React.FC<SupplierInvitationDetailProps> = ({ bat
         </div>
       )}
 
-      {batch.invitationResponse === 'accepted' && (
+      {batch.invitationResponse === 'accepted' && batchItems.length === 0 && (
+        <div className="bg-white rounded-2xl border p-6 text-center" style={{ borderColor: 'rgba(201,162,74,0.15)' }}>
+          <p className="text-xs text-gray-500">
+            This is a general enquiry with no fixed items listed yet.
+          </p>
+          <p className="text-xs text-gray-400 mt-1">
+            Reply via the message thread above to discuss pricing, scope and availability.
+          </p>
+          {!isLocked && (
+            <button
+              type="button" disabled={responding} onClick={() => setConfirmWithdraw(true)}
+              className="mt-3 text-[10px] text-gray-400 hover:text-red-500 transition-colors"
+            >
+              Withdraw from this request
+            </button>
+          )}
+        </div>
+      )}
+
+      {batch.invitationResponse === 'accepted' && batchItems.length > 0 && (
         <div className="bg-white rounded-2xl border p-6" style={{ borderColor: 'rgba(201,162,74,0.15)' }}>
           <h3 className="text-[10px] font-semibold uppercase tracking-[0.15em] mb-4" style={{ color: GOLD }}>
             <Package className="w-3.5 h-3.5 inline mr-1.5" /> Items ({batchItems.length})

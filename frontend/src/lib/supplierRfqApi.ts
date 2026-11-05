@@ -14,7 +14,7 @@ export interface SupplierInvitation {
   itemCount: number;
 }
 
-function rowToBatch(row: any): RFQBatch & { eventContext: Record<string, any> } {
+export function rowToBatch(row: any): RFQBatch & { eventContext: Record<string, any> } {
   return {
     id: row.id,
     eventId: row.event_id,
@@ -71,4 +71,25 @@ export async function respondToInvitation(batchId: string, response: 'accepted' 
   });
   if (error) { console.error('respondToInvitation error:', error); return false; }
   return true;
+}
+
+/** Creates a real RFQ invitation (zero line items - a general enquiry, not a structured
+ *  quote) addressed to a real, onboarded provider found via SearchProviders. Unlike the
+ *  event-based Sourcing flow, this never touches localStorage/EventContext - there is no
+ *  "event" to attach to, so the batch carries its own eventContext snapshot directly and
+ *  is immediately visible to the supplier the same way any other invitation is. */
+export async function createGeneralInquiry(
+  providerUserId: string,
+  supplierName: string,
+  message: string,
+  eventContext: Record<string, any>,
+): Promise<string | null> {
+  const { data, error } = await supabase.rpc('create_general_inquiry', {
+    p_provider_user_id: providerUserId,
+    p_supplier_name: supplierName,
+    p_message: message,
+    p_event_context: eventContext,
+  });
+  if (error) { console.error('createGeneralInquiry error:', error); return null; }
+  return data as string;
 }

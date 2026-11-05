@@ -53,7 +53,7 @@ export interface Conversation {
   unreadCount: number;
 }
 
-export type ViewType = 'home' | 'browse' | 'search-providers' | 'supplier' | 'dashboard' | 'budget' | 'checklist' | 'guests' | 'seating' | 'weather' | 'accommodation' | 'supplier-upload' | 'wizard' | 'workbook' | 'moodboard' | 'service-provider-registration' | 'provider-dashboard' | 'planner-dashboard' | 'event-detail' | 'event-proposal' | 'role-selector' | 'coordinator-dashboard' | 'coordinator-event' | 'coordinator-proposal' | 'theme-studio' | 'profile' | 'reset-password';
+export type ViewType = 'home' | 'browse' | 'search-providers' | 'supplier' | 'dashboard' | 'budget' | 'checklist' | 'guests' | 'seating' | 'weather' | 'accommodation' | 'supplier-upload' | 'wizard' | 'workbook' | 'moodboard' | 'service-provider-registration' | 'provider-dashboard' | 'planner-dashboard' | 'event-detail' | 'event-proposal' | 'role-selector' | 'coordinator-dashboard' | 'coordinator-event' | 'coordinator-proposal' | 'theme-studio' | 'profile' | 'reset-password' | 'supplier-my-events' | 'supplier-messages' | 'coordinator-messages';
 
 // Views that require the user to be authenticated.
 // Public views: home, browse, search-providers, supplier, reset-password
@@ -63,6 +63,7 @@ export const PROTECTED_VIEWS = new Set<ViewType>([
   'workbook', 'moodboard', 'service-provider-registration', 'provider-dashboard',
   'planner-dashboard', 'event-detail', 'event-proposal',
   'coordinator-dashboard', 'coordinator-event', 'coordinator-proposal', 'theme-studio',
+  'supplier-my-events', 'supplier-messages', 'coordinator-messages',
 ]);
 
 // Service Provider Registration Data

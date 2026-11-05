@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '@/contexts/AppContext';
-import { Menu, X, Heart, LogOut, LayoutDashboard, ChevronDown, Briefcase, Home, UserCircle } from 'lucide-react';
+import { Menu, X, Heart, LogOut, LayoutDashboard, ChevronDown, Briefcase, Home, UserCircle, MessageCircle } from 'lucide-react';
+import { getUnreadCountsForSupplier } from '@/lib/rfqMessagesApi';
+
+const MESSAGE_BADGE_POLL_MS = 30000;
 
 const Header: React.FC = () => {
   const {
@@ -18,6 +21,20 @@ const Header: React.FC = () => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [supplierUnread, setSupplierUnread] = useState(0);
+
+  // Global unread-messages badge for suppliers - independent of whatever view is currently
+  // mounted, since Provider Hub's own badge (SupplierShell) only polls while that view itself
+  // is on screen, and this icon needs to stay accurate from anywhere in the app.
+  useEffect(() => {
+    if (!isAuthenticated || user?.role !== 'supplier') { setSupplierUnread(0); return; }
+    const load = () => getUnreadCountsForSupplier().then(counts => {
+      setSupplierUnread(Object.values(counts).reduce((a, b) => a + b, 0));
+    });
+    load();
+    const interval = setInterval(load, MESSAGE_BADGE_POLL_MS);
+    return () => clearInterval(interval);
+  }, [isAuthenticated, user?.role]);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -133,19 +150,37 @@ const Header: React.FC = () => {
           <div className="hidden md:flex items-center space-x-5">
             {isAuthenticated ? (
               <>
-                {/* Wishlist */}
+                {/* Wishlist (host/coordinator) or My Events - events this supplier has accepted (supplier) */}
                 <button
-                  onClick={() => setCurrentView('dashboard')}
+                  onClick={() => setCurrentView(user?.role === 'supplier' ? 'supplier-my-events' : 'dashboard')}
                   className="relative p-2 hover:text-gold transition-colors"
                   style={{ color: '#FFFFFF' }}
+                  title={user?.role === 'supplier' ? 'My Events' : 'Wishlist'}
                 >
                   <Heart className="w-5 h-5" />
-                  {wishlist.length > 0 && (
+                  {user?.role !== 'supplier' && wishlist.length > 0 && (
                     <span className="absolute -top-1 -right-1 w-5 h-5 bg-gold text-[#0B1426] text-xs font-medium rounded-full flex items-center justify-center">
                       {wishlist.length}
                     </span>
                   )}
                 </button>
+
+                {/* Messages - a unified inbox across every RFQ conversation, for suppliers and coordinators */}
+                {(user?.role === 'supplier' || user?.role === 'coordinator') && (
+                  <button
+                    onClick={() => setCurrentView(user?.role === 'supplier' ? 'supplier-messages' : 'coordinator-messages')}
+                    className="relative p-2 hover:text-gold transition-colors"
+                    style={{ color: '#FFFFFF' }}
+                    title="Messages"
+                  >
+                    <MessageCircle className="w-5 h-5" />
+                    {user?.role === 'supplier' && supplierUnread > 0 && (
+                      <span className="absolute -top-1 -right-1 w-5 h-5 bg-gold text-[#0B1426] text-xs font-medium rounded-full flex items-center justify-center">
+                        {supplierUnread}
+                      </span>
+                    )}
+                  </button>
+                )}
 
                 {/* User Menu */}
                 <div className="relative">

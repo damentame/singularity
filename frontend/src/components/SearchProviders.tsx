@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAppContext } from '@/contexts/AppContext';
 import { supabase } from '@/lib/supabase';
+import { createGeneralInquiry } from '@/lib/supplierRfqApi';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -252,8 +253,39 @@ const SearchProviders: React.FC = () => {
     if (!selectedProvider || !user) return;
 
     setIsSubmittingQuote(true);
-    
+
     try {
+      // service_providers has no email column (it isn't publicly selectable, by design) - the
+      // provider's real email is resolved server-side by create_general_inquiry, which also
+      // creates the real rfq_batches row the provider's own account will see. Contact details
+      // ride along in the message body since there's no dedicated "host contact" column on a
+      // general enquiry - this is the same message the provider reads in their chat thread.
+      const contactLine = `— ${quoteForm.hostName} (${quoteForm.hostEmail}${quoteForm.hostPhone ? `, ${quoteForm.hostPhone}` : ''})`;
+      const eventContext = {
+        date: quoteForm.eventDate,
+        city: quoteForm.eventLocation,
+        eventType: quoteForm.eventType,
+        guestCount: parseInt(quoteForm.guestCount, 10) || 0,
+        budgetRange: quoteForm.budgetRange,
+        servicesRequested: quoteForm.servicesRequested,
+      };
+
+      const batchId = await createGeneralInquiry(
+        selectedProvider.user_id,
+        selectedProvider.business_name,
+        `${quoteForm.message}\n\n${contactLine}`,
+        eventContext,
+      );
+
+      if (!batchId) {
+        toast({
+          title: 'Could not send request',
+          description: 'Please try again in a moment.',
+          variant: 'destructive',
+        });
+        return;
+      }
+
       toast({
         title: 'Quote Request Sent!',
         description: `Your request has been sent to ${selectedProvider.business_name}. They will respond soon.`,

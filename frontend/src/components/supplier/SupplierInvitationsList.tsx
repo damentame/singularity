@@ -10,6 +10,10 @@ const URGENT_DAYS_THRESHOLD = 5;
 
 interface SupplierInvitationsListProps {
   onOpen: (batchId: string) => void;
+  /** When set, only invitations whose invitationResponse matches are shown - used by the
+   *  "My Events" page (the header heart icon), which only ever means events the supplier
+   *  actually said yes to, not every invitation they've ever received. */
+  filterResponse?: 'accepted';
 }
 
 const formatDate = (date: string) =>
@@ -31,7 +35,7 @@ function urgencyLabel(days: number): string {
   return `${days} days left`;
 }
 
-const SupplierInvitationsList: React.FC<SupplierInvitationsListProps> = ({ onOpen }) => {
+const SupplierInvitationsList: React.FC<SupplierInvitationsListProps> = ({ onOpen, filterResponse }) => {
   const [invitations, setInvitations] = useState<SupplierInvitation[]>([]);
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
@@ -55,19 +59,27 @@ const SupplierInvitationsList: React.FC<SupplierInvitationsListProps> = ({ onOpe
     );
   }
 
-  if (invitations.length === 0) {
+  const visible = filterResponse
+    ? invitations.filter(({ batch }) => batch.invitationResponse === filterResponse)
+    : invitations;
+
+  if (visible.length === 0) {
     return (
       <div className="text-center py-16">
         <Inbox className="w-8 h-8 mx-auto mb-3" style={{ color: 'rgba(201,162,74,0.3)' }} />
-        <p className="text-sm text-gray-400">No invitations yet.</p>
-        <p className="text-xs text-gray-300 mt-1">When a coordinator requests a quote from you, it'll show up here.</p>
+        <p className="text-sm text-gray-400">{filterResponse ? 'No accepted events yet.' : 'No invitations yet.'}</p>
+        <p className="text-xs text-gray-300 mt-1">
+          {filterResponse
+            ? 'Events you accept an invitation for will show up here.'
+            : "When a coordinator requests a quote from you, it'll show up here."}
+        </p>
       </div>
     );
   }
 
   return (
     <div className="space-y-3">
-      {invitations.map(({ batch, itemCount }) => {
+      {visible.map(({ batch, itemCount }) => {
         const ctx = batch.eventContext || {};
         const sym = getCurrencySymbol(ctx.currency || 'ZAR');
         const needsResponse = !batch.invitationResponse;
