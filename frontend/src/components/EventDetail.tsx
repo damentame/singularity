@@ -122,6 +122,19 @@ const EventDetail: React.FC<EventDetailProps> = ({ eventId, onBack, onGeneratePr
     return () => { cancelled = true; clearInterval(interval); };
   }, [event?.id]);
 
+  // Count batches with submitted quotes for Compare tab badge - kept above the `!event` guard
+  // below (even though it can only ever matter once an event exists) because a hook can never
+  // be called conditionally: a newly-created event can take a render or two to appear in the
+  // shared events array, so the very first render here sees no event and returns early - if this
+  // useMemo were declared after that return, that render would call one fewer hook than every
+  // later one, and React throws ("Rendered fewer hooks than expected") the moment the event
+  // shows up, which with no error boundary in the tree takes down the whole page.
+  const quotedBatchCount = useMemo(() => {
+    if (!event) return 0;
+    const batches = getBatchesForEvent(event.id);
+    return batches.filter(b => ['QUOTED', 'REVISED', 'ACCEPTED'].includes(b.status)).length;
+  }, [event?.id, event?.lineItems]);
+
   if (!event) return null;
 
   const summary = calculateSummary(event.lineItems);
@@ -132,12 +145,6 @@ const EventDetail: React.FC<EventDetailProps> = ({ eventId, onBack, onGeneratePr
   const shoppingCount = (event.shoppingLists || []).length;
   const orderCount = (event.salesOrders || []).length;
   const subEventCount = (event.moments || []).length;
-
-  // Count batches with submitted quotes for Compare tab badge
-  const quotedBatchCount = useMemo(() => {
-    const batches = getBatchesForEvent(event.id);
-    return batches.filter(b => ['QUOTED', 'REVISED', 'ACCEPTED'].includes(b.status)).length;
-  }, [event.id, event.lineItems]);
 
   // Count pending supplier assignments (not yet sent as bundled RFQ)
   const pendingAssignments = (event.supplierAssignments || []).filter(a => a.status === 'PENDING');

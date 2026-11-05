@@ -42,22 +42,31 @@ import ThemeStudio from './ThemeStudio';
 import { toast } from '@/components/ui/use-toast';
 
 
-// Every one of these views renders PlannerDashboard/EventDetail/ProposalView/ThemeStudio,
-// which read the full shared EventContext (every event this browser knows about) with no
-// per-event ownership filtering of their own - they're built for the coordinator role only.
-const COORDINATOR_ONLY_VIEWS = new Set([
-  'theme-studio', 'coordinator-dashboard', 'coordinator-event', 'coordinator-proposal',
-  'planner-dashboard', 'event-detail', 'event-proposal',
-]);
+// Every one of these views reads the full shared EventContext (every event this browser has
+// ever seen - events are stored under one localStorage key with no per-user scoping of their
+// own) with no per-event ownership filtering of its own - each is built for exactly one role
+// and must never render for another, however `currentView` got set otherwise (stale state from
+// before a role switch, a direct nav, a hardcoded route elsewhere that forgot about role - e.g.
+// VoiceAssistant's "dashboard" voice command used to send every role to the host's Dashboard).
+const VIEW_REQUIRES_ROLE: Record<string, 'coordinator' | 'host'> = {
+  'theme-studio': 'coordinator',
+  'coordinator-dashboard': 'coordinator',
+  'coordinator-event': 'coordinator',
+  'coordinator-proposal': 'coordinator',
+  'planner-dashboard': 'coordinator',
+  'event-detail': 'coordinator',
+  'event-proposal': 'coordinator',
+  'dashboard': 'host',
+};
 
 const AppLayout: React.FC = () => {
   const { currentView, isLoading, user, selectedSupplierId, setCurrentView, isAuthenticated, isPasswordRecovery, routeToRoleDashboard } = useAppContext();
   const { selectedEventId, selectedEvent, selectEvent } = useEventContext();
 
-  // A non-coordinator (host/supplier) must never reach these views, however `currentView`
-  // got set to one - stale state from before a role switch, a direct nav, etc. - since doing
-  // so would render every event in the shared EventContext, not just ones that belong to them.
-  const roleBlocksCoordinatorView = isAuthenticated && !!user && COORDINATOR_ONLY_VIEWS.has(currentView) && user.role !== 'coordinator';
+  // A user whose role doesn't match a view's required role must never reach it, since doing so
+  // would render every event in the shared EventContext, not just ones that belong to them.
+  const requiredRoleForView = VIEW_REQUIRES_ROLE[currentView];
+  const roleBlocksView = isAuthenticated && !!user && !!requiredRoleForView && user.role !== requiredRoleForView;
 
   useEffect(() => {
     if (currentView === 'coordinator-event' && !selectedEventId) {
@@ -68,10 +77,10 @@ const AppLayout: React.FC = () => {
       setCurrentView('planner-dashboard');
     } else if (currentView === 'event-proposal' && !selectedEvent) {
       setCurrentView('planner-dashboard');
-    } else if (roleBlocksCoordinatorView) {
+    } else if (roleBlocksView) {
       routeToRoleDashboard(user!.role);
     }
-  }, [currentView, selectedEventId, selectedEvent, setCurrentView, roleBlocksCoordinatorView, user, routeToRoleDashboard]);
+  }, [currentView, selectedEventId, selectedEvent, setCurrentView, roleBlocksView, user, routeToRoleDashboard]);
 
   // Auto-routing is now handled centrally in AppContext on session restore.
   // No need for sessionStorage hacks or useEffect auto-routing here.
@@ -120,7 +129,7 @@ const AppLayout: React.FC = () => {
   // too late to stop PlannerDashboard/EventDetail from mounting (and fetching/rendering every
   // event) for at least one frame. Block the render itself here instead; the effect still runs
   // to actually move currentView on to wherever this user's role does belong.
-  if (roleBlocksCoordinatorView) {
+  if (roleBlocksView) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#FAFAF7' }}>
         <p className="text-sm text-gray-400">Redirecting...</p>

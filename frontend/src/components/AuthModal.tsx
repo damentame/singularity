@@ -23,6 +23,7 @@ const AuthModal: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
+  const [companyName, setCompanyName] = useState('');
   const [role, setRole] = useState<'host' | 'supplier' | 'coordinator'>('host');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -100,7 +101,7 @@ const AuthModal: React.FC = () => {
           return;
         }
         const finalRole = preselectedRole || role;
-        const result = await signup(email, password, name, finalRole);
+        const result = await signup(email, password, name, finalRole, undefined, companyName.trim() || undefined);
         if (result.success) {
           resetForm();
         } else {
@@ -152,6 +153,7 @@ const AuthModal: React.FC = () => {
     setEmail('');
     setPassword('');
     setName('');
+    setCompanyName('');
     setRole('host');
     setError('');
     setResetEmail('');
@@ -534,6 +536,28 @@ const AuthModal: React.FC = () => {
                   </button>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* Company Name (signup only, coordinators only - optional) */}
+          {modalView === 'signup' && (preselectedRole || role) === 'coordinator' && (
+            <div>
+              <label
+                htmlFor="auth-company-name"
+                className="block text-xs uppercase tracking-[0.15em] mb-3"
+                style={{ color: '#4a5568' }}
+              >
+                Company Name <span className="normal-case text-gray-400">(optional)</span>
+              </label>
+              <input
+                id="auth-company-name"
+                type="text"
+                value={companyName}
+                onChange={handleInputChange(setCompanyName)}
+                className="w-full px-5 py-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-gold/40 focus:border-gold focus:outline-none transition-all duration-300 text-sm text-gray-900 bg-white"
+                placeholder="Your company or agency name"
+                autoComplete="organization"
+              />
             </div>
           )}
 

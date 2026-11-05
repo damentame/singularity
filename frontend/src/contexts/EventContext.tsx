@@ -759,6 +759,18 @@ export interface PlannerEvent {
   // v13: Contingency & Backup Plans
   contingencyPercent: number;          // % applied after Subtotal 3, before VAT (0 = disabled)
   contingencyNotes: string;            // Wet weather / backup plan description
+  // v17: Sub-clients - additional contacts on the same quote (e.g. a co-host, a second
+  // decision-maker). Opt-in only: a quote has zero of these unless someone explicitly adds one.
+  subClients: SubClient[];
+}
+
+export interface SubClient {
+  id: string;
+  name: string;
+  email: string;
+  phoneCode: string;
+  phone: string;
+  relationship: string;                // free text, e.g. "Co-host", "Best Man", "Finance contact"
 }
 
 
@@ -983,6 +995,9 @@ interface EventContextType {
   // Backup Venue Spaces
   addBackupVenueSpace: (eventId: string, space: Omit<VenueSpace, 'id'>) => void;
   removeBackupVenueSpace: (eventId: string, spaceId: string) => void;
+  // v17: Sub-clients
+  addSubClient: (eventId: string, subClient: Omit<SubClient, 'id'>) => void;
+  removeSubClient: (eventId: string, subClientId: string) => void;
   // ─── v6: Specs ─────────────────────────────────────────────────────────────
   addSpec: (eventId: string, spec: Omit<LineItemSpec, 'id'>) => string;
   updateSpec: (eventId: string, specId: string, updates: Partial<LineItemSpec>) => void;
@@ -1080,9 +1095,21 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   });
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
 
-  const persistEvents = useCallback((newEvents: PlannerEvent[]) => {
-    setEvents(newEvents);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(newEvents));
+  // Every mutator below (updateEvent, deleteEvent, etc.) is a useCallback keyed on [events, ...],
+  // so it gets a new identity whenever events changes - anyone who captured an older instance
+  // (a .then() continuation, a setTimeout, anything async) and calls it later would otherwise
+  // read a stale `events` snapshot and silently wipe out whatever changed in between (confirmed:
+  // PlannerDashboard's getNextQuoteNumber().then(() => updateEvent(...)) on a brand-new event
+  // was overwriting the just-created event with [], since its updateEvent closure still had the
+  // pre-creation empty array). Accepting an updater function and applying it through setEvents's
+  // own functional form guarantees `prev` is always genuinely current, regardless of how stale
+  // the calling closure is - the same fix React's own setState updater form exists to provide.
+  const persistEvents = useCallback((update: PlannerEvent[] | ((prev: PlannerEvent[]) => PlannerEvent[])) => {
+    setEvents(prev => {
+      const newEvents = typeof update === 'function' ? update(prev) : update;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(newEvents));
+      return newEvents;
+    });
   }, []);
 
   const selectedEvent = events.find(e => e.id === selectedEventId) || null;
@@ -1156,24 +1183,26 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       // v13: Contingency & Backup Plans
       contingencyPercent: 0,
       contingencyNotes: '',
+      // v17: Sub-clients
+      subClients: [],
     };
 
 
 
 
 
-    persistEvents([...events, newEvent]);
+    persistEvents(prev => [...prev, newEvent]);
     return id;
   }, [events, persistEvents]);
 
   const updateEvent = useCallback((eventId: string, updates: Partial<PlannerEvent>) => {
-    persistEvents(events.map(e =>
+    persistEvents(prev => prev.map(e =>
       e.id === eventId ? { ...e, ...updates, updatedAt: new Date().toISOString() } : e
     ));
   }, [events, persistEvents]);
 
   const deleteEvent = useCallback((eventId: string) => {
-    persistEvents(events.filter(e => e.id !== eventId));
+    persistEvents(prev => prev.filter(e => e.id !== eventId));
     if (selectedEventId === eventId) setSelectedEventId(null);
   }, [events, selectedEventId, persistEvents]);
 
@@ -1182,7 +1211,7 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, []);
 
   const updateGuestCount = useCallback((eventId: string, newCount: number) => {
-    persistEvents(events.map(e => {
+    persistEvents(prev => prev.map(e => {
       if (e.id !== eventId) return e;
       const updatedItems = e.lineItems.map(item => {
         if (!item.isGuestDependent) return item;
@@ -1198,7 +1227,7 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   // when their day count goes above 0, moved when dates/day-counts change, removed when
   // set back to 0.
   const updateVenueScheduling = useCallback((eventId: string, updates: { setupDays?: number; strikeDays?: number }) => {
-    persistEvents(events.map(e => {
+    persistEvents(prev => prev.map(e => {
       if (e.id !== eventId) return e;
       const setupDays = updates.setupDays ?? e.setupDays;
       const strikeDays = updates.strikeDays ?? e.strikeDays;
@@ -1231,7 +1260,7 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   // changes to match rather than just relabeling the displayed symbol.
   const convertEventCurrency = useCallback((eventId: string, newCurrency: string) => {
     const rates = getExchangeRates();
-    persistEvents(events.map(e => {
+    persistEvents(prev => prev.map(e => {
       if (e.id !== eventId) return e;
       const oldCurrency = e.currency || 'ZAR';
       if (oldCurrency === newCurrency) return e;
@@ -1253,7 +1282,7 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, [events, persistEvents]);
 
   const updateLineItem = useCallback((eventId: string, itemId: string, updates: Partial<CostLineItem>) => {
-    persistEvents(events.map(e => {
+    persistEvents(prev => prev.map(e => {
       if (e.id !== eventId) return e;
       return {
         ...e,
@@ -1265,14 +1294,14 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const addLineItem = useCallback((eventId: string, item: Omit<CostLineItem, 'id'>) => {
     const id = `li-${crypto.randomUUID()}`;
-    persistEvents(events.map(e => {
+    persistEvents(prev => prev.map(e => {
       if (e.id !== eventId) return e;
       return { ...e, lineItems: [...e.lineItems, { ...item, id }], updatedAt: new Date().toISOString() };
     }));
   }, [events, persistEvents]);
 
   const removeLineItem = useCallback((eventId: string, itemId: string) => {
-    persistEvents(events.map(e => {
+    persistEvents(prev => prev.map(e => {
       if (e.id !== eventId) return e;
       return {
         ...e,
@@ -1348,7 +1377,7 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, [calculateLineItem]);
 
   const saveVersion = useCallback((eventId: string, description: string) => {
-    persistEvents(events.map(e => {
+    persistEvents(prev => prev.map(e => {
       if (e.id !== eventId) return e;
       const newVersion: EventVersion = {
         id: `ver-${crypto.randomUUID()}`, versionNumber: e.currentVersion + 1,
@@ -1364,7 +1393,7 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, [events, persistEvents]);
 
   const restoreVersion = useCallback((eventId: string, versionId: string) => {
-    persistEvents(events.map(e => {
+    persistEvents(prev => prev.map(e => {
       if (e.id !== eventId) return e;
       const version = e.versions.find(v => v.id === versionId);
       if (!version) return e;
@@ -1389,12 +1418,12 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       }],
       currentVersion: 1, salesOrders: [], shoppingLists: [],
     };
-    persistEvents([...events, newEvent]);
+    persistEvents(prev => [...prev, newEvent]);
     return id;
   }, [events, persistEvents]);
 
   const addRFQMessage = useCallback((eventId: string, msg: Omit<RFQMessage, 'id' | 'sentAt' | 'status'>) => {
-    persistEvents(events.map(e => {
+    persistEvents(prev => prev.map(e => {
       if (e.id !== eventId) return e;
       const newMsg: RFQMessage = { ...msg, id: `rfq-${crypto.randomUUID()}`, sentAt: new Date().toISOString(), status: 'sent' };
       return {
@@ -1409,15 +1438,15 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const addVenueSpace = useCallback((eventId: string, space: Omit<VenueSpace, 'id'>) => {
     const id = `vs-${crypto.randomUUID()}`;
-    persistEvents(events.map(e => e.id !== eventId ? e : { ...e, venueSpaces: [...(e.venueSpaces || []), { ...space, id }], updatedAt: new Date().toISOString() }));
+    persistEvents(prev => prev.map(e => e.id !== eventId ? e : { ...e, venueSpaces: [...(e.venueSpaces || []), { ...space, id }], updatedAt: new Date().toISOString() }));
   }, [events, persistEvents]);
 
   const updateVenueSpace = useCallback((eventId: string, spaceId: string, updates: Partial<VenueSpace>) => {
-    persistEvents(events.map(e => e.id !== eventId ? e : { ...e, venueSpaces: (e.venueSpaces || []).map(s => s.id === spaceId ? { ...s, ...updates } : s), updatedAt: new Date().toISOString() }));
+    persistEvents(prev => prev.map(e => e.id !== eventId ? e : { ...e, venueSpaces: (e.venueSpaces || []).map(s => s.id === spaceId ? { ...s, ...updates } : s), updatedAt: new Date().toISOString() }));
   }, [events, persistEvents]);
 
   const removeVenueSpace = useCallback((eventId: string, spaceId: string) => {
-    persistEvents(events.map(e => e.id !== eventId ? e : {
+    persistEvents(prev => prev.map(e => e.id !== eventId ? e : {
       ...e, venueSpaces: (e.venueSpaces || []).filter(s => s.id !== spaceId),
       moments: (e.moments || []).map(m => m.venueSpaceId === spaceId ? { ...m, venueSpaceId: '' } : m),
       updatedAt: new Date().toISOString(),
@@ -1428,15 +1457,15 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const addMoment = useCallback((eventId: string, moment: Omit<EventMoment, 'id'>) => {
     const id = `mom-${crypto.randomUUID()}`;
-    persistEvents(events.map(e => e.id !== eventId ? e : { ...e, moments: [...(e.moments || []), { ...moment, id }], updatedAt: new Date().toISOString() }));
+    persistEvents(prev => prev.map(e => e.id !== eventId ? e : { ...e, moments: [...(e.moments || []), { ...moment, id }], updatedAt: new Date().toISOString() }));
   }, [events, persistEvents]);
 
   const updateMoment = useCallback((eventId: string, momentId: string, updates: Partial<EventMoment>) => {
-    persistEvents(events.map(e => e.id !== eventId ? e : { ...e, moments: (e.moments || []).map(m => m.id === momentId ? { ...m, ...updates } : m), updatedAt: new Date().toISOString() }));
+    persistEvents(prev => prev.map(e => e.id !== eventId ? e : { ...e, moments: (e.moments || []).map(m => m.id === momentId ? { ...m, ...updates } : m), updatedAt: new Date().toISOString() }));
   }, [events, persistEvents]);
 
   const removeMoment = useCallback((eventId: string, momentId: string) => {
-    persistEvents(events.map(e => e.id !== eventId ? e : {
+    persistEvents(prev => prev.map(e => e.id !== eventId ? e : {
       ...e, moments: (e.moments || []).filter(m => m.id !== momentId && m.parentMomentId !== momentId),
       lineItems: e.lineItems.map(li => li.momentId === momentId ? { ...li, momentId: '' } : li),
       updatedAt: new Date().toISOString(),
@@ -1447,20 +1476,20 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const addLoadSlot = useCallback((eventId: string, slot: Omit<SupplierLoadSlot, 'id'>): string => {
     const id = `ls-${crypto.randomUUID()}`;
-    persistEvents(events.map(e => e.id !== eventId ? e : {
+    persistEvents(prev => prev.map(e => e.id !== eventId ? e : {
       ...e, loadSlots: [...(e.loadSlots || []), { ...slot, id }], updatedAt: new Date().toISOString(),
     }));
     return id;
   }, [events, persistEvents]);
 
   const updateLoadSlot = useCallback((eventId: string, slotId: string, updates: Partial<SupplierLoadSlot>) => {
-    persistEvents(events.map(e => e.id !== eventId ? e : {
+    persistEvents(prev => prev.map(e => e.id !== eventId ? e : {
       ...e, loadSlots: (e.loadSlots || []).map(s => s.id === slotId ? { ...s, ...updates } : s), updatedAt: new Date().toISOString(),
     }));
   }, [events, persistEvents]);
 
   const removeLoadSlot = useCallback((eventId: string, slotId: string) => {
-    persistEvents(events.map(e => e.id !== eventId ? e : {
+    persistEvents(prev => prev.map(e => e.id !== eventId ? e : {
       ...e, loadSlots: (e.loadSlots || []).filter(s => s.id !== slotId), updatedAt: new Date().toISOString(),
     }));
   }, [events, persistEvents]);
@@ -1473,7 +1502,7 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const linkEventsToGroup = useCallback((eventIds: string[], groupCode?: string): string => {
     const code = groupCode || generateGroupCode();
     const idSet = new Set(eventIds);
-    persistEvents(events.map(e => idSet.has(e.id) ? { ...e, groupCode: code, updatedAt: new Date().toISOString() } : e));
+    persistEvents(prev => prev.map(e => idSet.has(e.id) ? { ...e, groupCode: code, updatedAt: new Date().toISOString() } : e));
     return code;
   }, [events, persistEvents]);
 
@@ -1482,7 +1511,7 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, [linkEventsToGroup]);
 
   const unlinkEventFromGroup = useCallback((eventId: string) => {
-    persistEvents(events.map(e => e.id !== eventId ? e : { ...e, groupCode: '', updatedAt: new Date().toISOString() }));
+    persistEvents(prev => prev.map(e => e.id !== eventId ? e : { ...e, groupCode: '', updatedAt: new Date().toISOString() }));
   }, [events, persistEvents]);
 
   const getGroupedEvents = useCallback((groupCode: string): PlannerEvent[] => {
@@ -1513,15 +1542,15 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const addProgram = useCallback((eventId: string, program: Omit<EventProgram, 'id'>) => {
     const id = `prog-${crypto.randomUUID()}`;
-    persistEvents(events.map(e => e.id !== eventId ? e : { ...e, programs: [...(e.programs || []), { ...program, id }], updatedAt: new Date().toISOString() }));
+    persistEvents(prev => prev.map(e => e.id !== eventId ? e : { ...e, programs: [...(e.programs || []), { ...program, id }], updatedAt: new Date().toISOString() }));
   }, [events, persistEvents]);
 
   const updateProgram = useCallback((eventId: string, programId: string, updates: Partial<EventProgram>) => {
-    persistEvents(events.map(e => e.id !== eventId ? e : { ...e, programs: (e.programs || []).map(p => p.id === programId ? { ...p, ...updates } : p), updatedAt: new Date().toISOString() }));
+    persistEvents(prev => prev.map(e => e.id !== eventId ? e : { ...e, programs: (e.programs || []).map(p => p.id === programId ? { ...p, ...updates } : p), updatedAt: new Date().toISOString() }));
   }, [events, persistEvents]);
 
   const removeProgram = useCallback((eventId: string, programId: string) => {
-    persistEvents(events.map(e => e.id !== eventId ? e : {
+    persistEvents(prev => prev.map(e => e.id !== eventId ? e : {
       ...e, programs: (e.programs || []).filter(p => p.id !== programId),
       moments: (e.moments || []).map(m => m.programId === programId ? { ...m, programId: '' } : m),
       lineItems: e.lineItems.map(li => li.programId === programId ? { ...li, programId: '' } : li),
@@ -1533,18 +1562,29 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const addBackupVenueSpace = useCallback((eventId: string, space: Omit<VenueSpace, 'id'>) => {
     const id = `bvs-${crypto.randomUUID()}`;
-    persistEvents(events.map(e => e.id !== eventId ? e : { ...e, backupVenueSpaces: [...(e.backupVenueSpaces || []), { ...space, id }], updatedAt: new Date().toISOString() }));
+    persistEvents(prev => prev.map(e => e.id !== eventId ? e : { ...e, backupVenueSpaces: [...(e.backupVenueSpaces || []), { ...space, id }], updatedAt: new Date().toISOString() }));
   }, [events, persistEvents]);
 
   const removeBackupVenueSpace = useCallback((eventId: string, spaceId: string) => {
-    persistEvents(events.map(e => e.id !== eventId ? e : { ...e, backupVenueSpaces: (e.backupVenueSpaces || []).filter(s => s.id !== spaceId), updatedAt: new Date().toISOString() }));
+    persistEvents(prev => prev.map(e => e.id !== eventId ? e : { ...e, backupVenueSpaces: (e.backupVenueSpaces || []).filter(s => s.id !== spaceId), updatedAt: new Date().toISOString() }));
+  }, [events, persistEvents]);
+
+  // ─── v17: Sub-clients ────────────────────────────────────────────────────────
+
+  const addSubClient = useCallback((eventId: string, subClient: Omit<SubClient, 'id'>) => {
+    const id = `subc-${crypto.randomUUID()}`;
+    persistEvents(prev => prev.map(e => e.id !== eventId ? e : { ...e, subClients: [...(e.subClients || []), { ...subClient, id }], updatedAt: new Date().toISOString() }));
+  }, [events, persistEvents]);
+
+  const removeSubClient = useCallback((eventId: string, subClientId: string) => {
+    persistEvents(prev => prev.map(e => e.id !== eventId ? e : { ...e, subClients: (e.subClients || []).filter(s => s.id !== subClientId), updatedAt: new Date().toISOString() }));
   }, [events, persistEvents]);
 
   // ─── v6: Specs ─────────────────────────────────────────────────────────────
 
   const addSpec = useCallback((eventId: string, spec: Omit<LineItemSpec, 'id'>): string => {
     const id = `spec-${crypto.randomUUID()}`;
-    persistEvents(events.map(e => {
+    persistEvents(prev => prev.map(e => {
       if (e.id !== eventId) return e;
       const newSpecs = [...(e.specs || []), { ...spec, id }];
       // Also link spec to the line item
@@ -1557,14 +1597,14 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, [events, persistEvents]);
 
   const updateSpec = useCallback((eventId: string, specId: string, updates: Partial<LineItemSpec>) => {
-    persistEvents(events.map(e => e.id !== eventId ? e : {
+    persistEvents(prev => prev.map(e => e.id !== eventId ? e : {
       ...e, specs: (e.specs || []).map(s => s.id === specId ? { ...s, ...updates, updatedAt: new Date().toISOString() } : s),
       updatedAt: new Date().toISOString(),
     }));
   }, [events, persistEvents]);
 
   const removeSpec = useCallback((eventId: string, specId: string) => {
-    persistEvents(events.map(e => {
+    persistEvents(prev => prev.map(e => {
       if (e.id !== eventId) return e;
       return {
         ...e,
@@ -1584,21 +1624,21 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const addTask = useCallback((eventId: string, task: Omit<EventTask, 'id' | 'createdAt' | 'updatedAt'>) => {
     const id = `task-${crypto.randomUUID()}`;
     const now = new Date().toISOString();
-    persistEvents(events.map(e => e.id !== eventId ? e : {
+    persistEvents(prev => prev.map(e => e.id !== eventId ? e : {
       ...e, tasks: [...(e.tasks || []), { ...task, id, createdAt: now, updatedAt: now }],
       updatedAt: now,
     }));
   }, [events, persistEvents]);
 
   const updateTask = useCallback((eventId: string, taskId: string, updates: Partial<EventTask>) => {
-    persistEvents(events.map(e => e.id !== eventId ? e : {
+    persistEvents(prev => prev.map(e => e.id !== eventId ? e : {
       ...e, tasks: (e.tasks || []).map(t => t.id === taskId ? { ...t, ...updates, updatedAt: new Date().toISOString() } : t),
       updatedAt: new Date().toISOString(),
     }));
   }, [events, persistEvents]);
 
   const removeTask = useCallback((eventId: string, taskId: string) => {
-    persistEvents(events.map(e => e.id !== eventId ? e : {
+    persistEvents(prev => prev.map(e => e.id !== eventId ? e : {
       ...e, tasks: (e.tasks || []).filter(t => t.id !== taskId), updatedAt: new Date().toISOString(),
     }));
   }, [events, persistEvents]);
@@ -1608,7 +1648,7 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const addShoppingList = useCallback((eventId: string, list: Omit<ShoppingList, 'id' | 'items' | 'createdAt' | 'updatedAt'>): string => {
     const id = `sl-${crypto.randomUUID()}`;
     const now = new Date().toISOString();
-    persistEvents(events.map(e => e.id !== eventId ? e : {
+    persistEvents(prev => prev.map(e => e.id !== eventId ? e : {
       ...e, shoppingLists: [...(e.shoppingLists || []), { ...list, id, items: [], createdAt: now, updatedAt: now }],
       updatedAt: now,
     }));
@@ -1616,21 +1656,21 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, [events, persistEvents]);
 
   const updateShoppingList = useCallback((eventId: string, listId: string, updates: Partial<ShoppingList>) => {
-    persistEvents(events.map(e => e.id !== eventId ? e : {
+    persistEvents(prev => prev.map(e => e.id !== eventId ? e : {
       ...e, shoppingLists: (e.shoppingLists || []).map(l => l.id === listId ? { ...l, ...updates, updatedAt: new Date().toISOString() } : l),
       updatedAt: new Date().toISOString(),
     }));
   }, [events, persistEvents]);
 
   const removeShoppingList = useCallback((eventId: string, listId: string) => {
-    persistEvents(events.map(e => e.id !== eventId ? e : {
+    persistEvents(prev => prev.map(e => e.id !== eventId ? e : {
       ...e, shoppingLists: (e.shoppingLists || []).filter(l => l.id !== listId), updatedAt: new Date().toISOString(),
     }));
   }, [events, persistEvents]);
 
   const addShoppingListItem = useCallback((eventId: string, listId: string, item: Omit<ShoppingListItem, 'id'>) => {
     const id = `sli-${crypto.randomUUID()}`;
-    persistEvents(events.map(e => {
+    persistEvents(prev => prev.map(e => {
       if (e.id !== eventId) return e;
       return {
         ...e,
@@ -1646,7 +1686,7 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, [events, persistEvents]);
 
   const updateShoppingListItem = useCallback((eventId: string, listId: string, itemId: string, updates: Partial<ShoppingListItem>) => {
-    persistEvents(events.map(e => {
+    persistEvents(prev => prev.map(e => {
       if (e.id !== eventId) return e;
       return {
         ...e,
@@ -1662,7 +1702,7 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, [events, persistEvents]);
 
   const removeShoppingListItem = useCallback((eventId: string, listId: string, itemId: string) => {
-    persistEvents(events.map(e => {
+    persistEvents(prev => prev.map(e => {
       if (e.id !== eventId) return e;
       return {
         ...e,
@@ -1732,7 +1772,7 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       updatedAt: now,
     };
 
-    persistEvents(events.map(e => {
+    persistEvents(prev => prev.map(e => {
       if (e.id !== eventId) return e;
       return {
         ...e,
@@ -1747,7 +1787,7 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, [events, persistEvents, calculateLineItem]);
 
   const updateSalesOrder = useCallback((eventId: string, orderId: string, updates: Partial<SalesOrder>) => {
-    persistEvents(events.map(e => e.id !== eventId ? e : {
+    persistEvents(prev => prev.map(e => e.id !== eventId ? e : {
       ...e, salesOrders: (e.salesOrders || []).map(so => so.id === orderId ? { ...so, ...updates, updatedAt: new Date().toISOString() } : so),
       updatedAt: new Date().toISOString(),
     }));
@@ -1799,7 +1839,7 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       updatedAt: now,
     };
 
-    persistEvents(events.map(e => e.id !== eventId ? e : {
+    persistEvents(prev => prev.map(e => e.id !== eventId ? e : {
       ...e, shoppingLists: [...(e.shoppingLists || []), list], updatedAt: now,
     }));
 
@@ -1841,6 +1881,7 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       addMoment, updateMoment, removeMoment,
       addProgram, updateProgram, removeProgram,
       addBackupVenueSpace, removeBackupVenueSpace,
+      addSubClient, removeSubClient,
       // v6
       addSpec, updateSpec, removeSpec, getSpecsForItem,
       addTask, updateTask, removeTask,

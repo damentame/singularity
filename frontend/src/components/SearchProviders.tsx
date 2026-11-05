@@ -27,7 +27,6 @@ const SERVICE_CATEGORIES = [
 const EVENT_TYPES = [
   { id: 'weddings', label: 'Weddings' },
   { id: 'corporate', label: 'Corporate Events' },
-  { id: 'social', label: 'Social Events' },
   { id: 'celebrations', label: 'Celebrations' },
 ];
 

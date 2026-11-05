@@ -31,6 +31,7 @@ import {
   CreditCard,
   FileText,
   Clock as ClockIcon,
+  Plus,
 } from 'lucide-react';
 
 import { 
@@ -153,8 +154,28 @@ const PhoneInput = ({
       type="tel"
       value={value}
       onChange={(e) => {
-        const numericValue = e.target.value.replace(/[^0-9]/g, '');
-        onValueChange(numericValue);
+        const raw = e.target.value;
+        const dialDigits = dialCode.replace(/\D/g, '');
+        // A pasted/typed full international number (e.g. "+27 82 123 4567") would otherwise
+        // keep the country code mixed into the digits, duplicating it against the separate
+        // dial-code selector below (producing something like "+2727821234567" on submit).
+        // A paste arrives as one complete string, so stripping it in a single pass (the `else`
+        // branch below) is enough. Typing it one key at a time is trickier: stripping the "+"
+        // on the very first keystroke (before any digits exist to compare) would erase it
+        // before "2" and "7" ever get a chance to join it - so while a leading "+" is present,
+        // keep showing exactly what's been typed so far (digits and all) until enough digits
+        // have accumulated to actually confirm a match against the dial code, only then
+        // collapsing it down to the local number.
+        if (raw.trim().startsWith('+')) {
+          const digitsAfterPlus = raw.replace(/[^0-9]/g, '');
+          if (dialDigits && digitsAfterPlus.length > dialDigits.length && digitsAfterPlus.startsWith(dialDigits)) {
+            onValueChange(digitsAfterPlus.slice(dialDigits.length));
+          } else {
+            onValueChange(raw.replace(/[^0-9+]/g, ''));
+          }
+          return;
+        }
+        onValueChange(raw.replace(/[^0-9]/g, ''));
       }}
       placeholder={placeholder}
       className="flex-1 px-4 py-3 bg-white/5 border border-white/10 rounded-r-xl text-white placeholder-white/40 focus:outline-none focus:border-gold/50 transition-colors"
@@ -162,6 +183,98 @@ const PhoneInput = ({
     />
   </div>
 );
+
+// A multiselect field's predefined options are never exhaustive - every category needs a way
+// to add a service that isn't in the list. Defined at module scope (not inline inside the Step
+// 5 render) for the same reason as PhoneInput above: it owns its own "adding" input state, which
+// a function defined inside another component's render body can't safely do per-instance.
+const MultiSelectWithCustom = ({
+  options,
+  selected,
+  onChange,
+}: {
+  options: string[];
+  selected: string[];
+  onChange: (updated: string[]) => void;
+}) => {
+  const [adding, setAdding] = useState(false);
+  const [customValue, setCustomValue] = useState('');
+
+  // Anything selected that isn't one of the predefined options is a custom addition - keep it
+  // visible as its own chip (with a way to remove it) rather than letting it vanish silently.
+  const customSelected = selected.filter((s) => !options.includes(s));
+
+  const toggle = (option: string) => {
+    onChange(selected.includes(option) ? selected.filter((o) => o !== option) : [...selected, option]);
+  };
+
+  const confirmAdd = () => {
+    const value = customValue.trim();
+    if (value && !selected.includes(value)) {
+      onChange([...selected, value]);
+    }
+    setCustomValue('');
+    setAdding(false);
+  };
+
+  return (
+    <div className="flex flex-wrap gap-2 items-center">
+      {options.map((option) => {
+        const isSelected = selected.includes(option);
+        return (
+          <button
+            key={option}
+            type="button"
+            onClick={() => toggle(option)}
+            className={`px-3 py-1.5 rounded-lg text-xs transition-colors ${
+              isSelected
+                ? 'bg-gold/20 border-gold text-gold border'
+                : 'bg-white/5 border-white/10 text-white/70 border hover:border-gold/30'
+            }`}
+          >
+            {option}
+          </button>
+        );
+      })}
+      {customSelected.map((option) => (
+        <button
+          key={option}
+          type="button"
+          onClick={() => toggle(option)}
+          className="px-3 py-1.5 rounded-lg text-xs transition-colors bg-gold/20 border-gold text-gold border flex items-center gap-1"
+        >
+          {option} <X className="w-3 h-3" />
+        </button>
+      ))}
+      {adding ? (
+        <div className="flex items-center gap-1">
+          <input
+            autoFocus
+            type="text"
+            value={customValue}
+            onChange={(e) => setCustomValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') { e.preventDefault(); confirmAdd(); }
+              if (e.key === 'Escape') { setAdding(false); setCustomValue(''); }
+            }}
+            onBlur={confirmAdd}
+            placeholder="Add a service"
+            className="px-2.5 py-1.5 text-xs rounded-lg bg-white/5 border border-gold/40 text-white placeholder-white/30 focus:outline-none w-32"
+            style={{ fontFamily: '"Inter", sans-serif' }}
+          />
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setAdding(true)}
+          className="px-3 py-1.5 rounded-lg text-xs border border-dashed border-white/20 text-white/50 hover:border-gold/40 hover:text-gold transition-colors flex items-center gap-1"
+        >
+          <Plus className="w-3 h-3" /> Add
+        </button>
+      )}
+    </div>
+  );
+};
 
 // Timeout wrapper for async operations
 const withTimeout = <T,>(promise: Promise<T>, ms: number): Promise<T> => {
@@ -1680,31 +1793,11 @@ const ServiceProviderWizard: React.FC<ServiceProviderWizardProps> = ({ onClose, 
                             )}
                             
                             {field.type === 'multiselect' && (
-                              <div className="flex flex-wrap gap-2">
-                                {field.options?.slice(0, 6).map((option) => {
-                                  const selected = (formData.serviceDetails[categoryId]?.[field.id] || []).includes(option);
-                                  return (
-                                    <button
-                                      key={option}
-                                      type="button"
-                                      onClick={() => {
-                                        const current = formData.serviceDetails[categoryId]?.[field.id] || [];
-                                        const updated = selected
-                                          ? current.filter((o: string) => o !== option)
-                                          : [...current, option];
-                                        updateServiceDetail(categoryId, field.id, updated);
-                                      }}
-                                      className={`px-3 py-1.5 rounded-lg text-xs transition-colors ${
-                                        selected
-                                          ? 'bg-gold/20 border-gold text-gold border'
-                                          : 'bg-white/5 border-white/10 text-white/70 border hover:border-gold/30'
-                                      }`}
-                                    >
-                                      {option}
-                                    </button>
-                                  );
-                                })}
-                              </div>
+                              <MultiSelectWithCustom
+                                options={field.options || []}
+                                selected={formData.serviceDetails[categoryId]?.[field.id] || []}
+                                onChange={(updated) => updateServiceDetail(categoryId, field.id, updated)}
+                              />
                             )}
                             
                             {field.type === 'boolean' && (
