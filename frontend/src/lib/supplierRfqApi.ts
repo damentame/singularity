@@ -14,7 +14,7 @@ export interface SupplierInvitation {
   itemCount: number;
 }
 
-function rowToBatch(row: any): RFQBatch & { eventContext: Record<string, any> } {
+export function rowToBatch(row: any): RFQBatch & { eventContext: Record<string, any> } {
   return {
     id: row.id,
     eventId: row.event_id,
@@ -60,13 +60,36 @@ export async function getMyInvitations(): Promise<SupplierInvitation[]> {
   return batches.map(row => ({ batch: rowToBatch(row), itemCount: counts[row.id] || 0 }));
 }
 
-/** Accept or decline an invitation to quote. Only ever touches invitation_response/
- *  invitation_responded_at (enforced server-side by the RPC, not just by convention). */
-export async function respondToInvitation(batchId: string, response: 'accepted' | 'declined'): Promise<boolean> {
+/** Accept, decline, or withdraw from an invitation to quote. Only ever touches
+ *  invitation_response/invitation_responded_at (enforced server-side by the RPC, not just by
+ *  convention). "Withdrawn" is distinct from "declined" - it means the supplier said yes
+ *  (and may have already quoted) before backing out, which coordinators care about differently. */
+export async function respondToInvitation(batchId: string, response: 'accepted' | 'declined' | 'withdrawn'): Promise<boolean> {
   const { error } = await supabase.rpc('supplier_respond_to_invitation', {
     p_batch_id: batchId,
     p_response: response,
   });
   if (error) { console.error('respondToInvitation error:', error); return false; }
   return true;
+}
+
+/** Creates a real RFQ invitation (zero line items - a general enquiry, not a structured
+ *  quote) addressed to a real, onboarded provider found via SearchProviders. Unlike the
+ *  event-based Sourcing flow, this never touches localStorage/EventContext - there is no
+ *  "event" to attach to, so the batch carries its own eventContext snapshot directly and
+ *  is immediately visible to the supplier the same way any other invitation is. */
+export async function createGeneralInquiry(
+  providerUserId: string,
+  supplierName: string,
+  message: string,
+  eventContext: Record<string, any>,
+): Promise<string | null> {
+  const { data, error } = await supabase.rpc('create_general_inquiry', {
+    p_provider_user_id: providerUserId,
+    p_supplier_name: supplierName,
+    p_message: message,
+    p_event_context: eventContext,
+  });
+  if (error) { console.error('createGeneralInquiry error:', error); return null; }
+  return data as string;
 }

@@ -6,6 +6,8 @@
 // only) go through security-definer RPCs, matching rfqPortalApi.ts's pattern.
 
 import { supabase } from '@/lib/supabase';
+import { rowToBatch } from '@/lib/supplierRfqApi';
+import { RFQBatch } from '@/contexts/EventContext';
 
 export interface RFQThreadMessage {
   id: string;
@@ -190,6 +192,58 @@ export async function getRecentMessagesForEvent(eventId: string): Promise<Recent
   }
 
   return recent;
+}
+
+export interface ConversationSummary {
+  batch: RFQBatch & { eventContext: Record<string, any> };
+  lastMessage: RFQThreadMessage | null;
+  lastActivityAt: string;
+  unreadCount: number;
+}
+
+/** Every RFQ batch the current user can see (RLS scopes this identically to getMyInvitations
+ *  for a supplier, or "Coordinators can manage own RFQ batches" for a coordinator), paired with
+ *  its latest message and unread count - the data behind a single, role-agnostic inbox. Which
+ *  side's messages count as "unread" depends on which side is viewing, since read state is
+ *  tracked as two separate columns (read_by_supplier / read_by_coordinator), not a generic
+ *  "read by me" flag. */
+export async function getMyConversations(role: 'coordinator' | 'supplier'): Promise<ConversationSummary[]> {
+  const { data: batches, error } = await supabase.from('rfq_batches').select('*');
+  if (error || !batches || batches.length === 0) {
+    if (error) console.error('getMyConversations error:', error);
+    return [];
+  }
+
+  const batchIds = batches.map(b => b.id);
+  const { data: messages } = await supabase
+    .from('rfq_messages')
+    .select('*')
+    .in('rfq_batch_id', batchIds)
+    .order('created_at', { ascending: false });
+
+  const theirSenderTypes = role === 'supplier' ? ['coordinator', 'system'] : ['supplier'];
+  const readColumn = role === 'supplier' ? 'read_by_supplier' : 'read_by_coordinator';
+
+  const lastByBatch = new Map<string, RFQThreadMessage>();
+  const unreadByBatch = new Map<string, number>();
+  for (const row of messages || []) {
+    if (!lastByBatch.has(row.rfq_batch_id)) lastByBatch.set(row.rfq_batch_id, rowToMessage(row));
+    if (theirSenderTypes.includes(row.sender_type) && !row[readColumn]) {
+      unreadByBatch.set(row.rfq_batch_id, (unreadByBatch.get(row.rfq_batch_id) || 0) + 1);
+    }
+  }
+
+  return batches
+    .map(row => {
+      const lastMessage = lastByBatch.get(row.id) || null;
+      return {
+        batch: rowToBatch(row),
+        lastMessage,
+        lastActivityAt: lastMessage?.createdAt || row.created_at,
+        unreadCount: unreadByBatch.get(row.id) || 0,
+      };
+    })
+    .sort((a, b) => new Date(b.lastActivityAt).getTime() - new Date(a.lastActivityAt).getTime());
 }
 
 function rowToMessage(row: any): RFQThreadMessage {

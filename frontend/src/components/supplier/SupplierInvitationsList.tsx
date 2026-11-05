@@ -1,20 +1,41 @@
 import React, { useEffect, useState } from 'react';
-import { Package, ChevronRight, Loader2, Inbox, MessageCircle } from 'lucide-react';
+import { Package, ChevronRight, Loader2, Inbox, MessageCircle, Clock } from 'lucide-react';
 import { getMyInvitations, SupplierInvitation } from '@/lib/supplierRfqApi';
 import { getUnreadCountsForSupplier } from '@/lib/rfqMessagesApi';
 import { RFQ_BATCH_STATUS_LABELS, RFQ_BATCH_STATUS_COLORS } from '@/contexts/EventContext';
 import { getCurrencySymbol } from '@/data/countryConfig';
 
 const GOLD = '#C9A24A';
+const URGENT_DAYS_THRESHOLD = 5;
 
 interface SupplierInvitationsListProps {
   onOpen: (batchId: string) => void;
+  /** When set, only invitations whose invitationResponse matches are shown - used by the
+   *  "My Events" page (the header heart icon), which only ever means events the supplier
+   *  actually said yes to, not every invitation they've ever received. */
+  filterResponse?: 'accepted';
 }
 
 const formatDate = (date: string) =>
   date ? new Date(date + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Date TBC';
 
-const SupplierInvitationsList: React.FC<SupplierInvitationsListProps> = ({ onOpen }) => {
+/** Whole days from today until dateStr (negative if already past); null if no date is set. */
+function daysUntil(dateStr: string): number | null {
+  if (!dateStr) return null;
+  const target = new Date(dateStr + 'T00:00:00');
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return Math.round((target.getTime() - today.getTime()) / 86400000);
+}
+
+function urgencyLabel(days: number): string {
+  if (days < 0) return 'Overdue';
+  if (days === 0) return 'Today';
+  if (days === 1) return 'Tomorrow';
+  return `${days} days left`;
+}
+
+const SupplierInvitationsList: React.FC<SupplierInvitationsListProps> = ({ onOpen, filterResponse }) => {
   const [invitations, setInvitations] = useState<SupplierInvitation[]>([]);
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
@@ -38,23 +59,38 @@ const SupplierInvitationsList: React.FC<SupplierInvitationsListProps> = ({ onOpe
     );
   }
 
-  if (invitations.length === 0) {
+  const visible = filterResponse
+    ? invitations.filter(({ batch }) => batch.invitationResponse === filterResponse)
+    : invitations;
+
+  if (visible.length === 0) {
     return (
       <div className="text-center py-16">
         <Inbox className="w-8 h-8 mx-auto mb-3" style={{ color: 'rgba(201,162,74,0.3)' }} />
-        <p className="text-sm text-gray-400">No invitations yet.</p>
-        <p className="text-xs text-gray-300 mt-1">When a coordinator requests a quote from you, it'll show up here.</p>
+        <p className="text-sm text-gray-400">{filterResponse ? 'No accepted events yet.' : 'No invitations yet.'}</p>
+        <p className="text-xs text-gray-300 mt-1">
+          {filterResponse
+            ? 'Events you accept an invitation for will show up here.'
+            : "When a coordinator requests a quote from you, it'll show up here."}
+        </p>
       </div>
     );
   }
 
   return (
     <div className="space-y-3">
-      {invitations.map(({ batch, itemCount }) => {
+      {visible.map(({ batch, itemCount }) => {
         const ctx = batch.eventContext || {};
         const sym = getCurrencySymbol(ctx.currency || 'ZAR');
         const needsResponse = !batch.invitationResponse;
         const unread = unreadCounts[batch.id] || 0;
+        // Still needs action from the supplier: either they haven't responded yet, or they
+        // accepted but haven't submitted a price yet. Once quoted, declined, or withdrawn,
+        // the ball is elsewhere and the date no longer needs to nag them.
+        const needsAction = needsResponse || (batch.invitationResponse === 'accepted' && batch.currentSubmittedVersion === 0);
+        const days = needsAction ? daysUntil(ctx.date) : null;
+        const urgent = days !== null && days <= URGENT_DAYS_THRESHOLD;
+        const soon = urgent && days !== null && days <= 2;
 
         return (
           <button
@@ -77,6 +113,11 @@ const SupplierInvitationsList: React.FC<SupplierInvitationsListProps> = ({ onOpe
                 >
                   {RFQ_BATCH_STATUS_LABELS[batch.status]}
                 </span>
+                {(batch.invitationResponse === 'declined' || batch.invitationResponse === 'withdrawn') && (
+                  <span className="text-[9px] font-medium px-2 py-0.5 rounded-full text-white flex-shrink-0" style={{ backgroundColor: '#9CA3AF' }}>
+                    {batch.invitationResponse === 'declined' ? 'Declined' : 'Withdrawn'}
+                  </span>
+                )}
                 {needsResponse && (
                   <span className="text-[9px] font-semibold px-2 py-0.5 rounded-full text-white flex-shrink-0" style={{ backgroundColor: '#EF4444' }}>
                     Needs response
@@ -85,6 +126,14 @@ const SupplierInvitationsList: React.FC<SupplierInvitationsListProps> = ({ onOpe
                 {unread > 0 && (
                   <span className="flex items-center gap-1 text-[9px] font-semibold px-2 py-0.5 rounded-full text-white flex-shrink-0" style={{ backgroundColor: GOLD }}>
                     <MessageCircle className="w-2.5 h-2.5" /> {unread}
+                  </span>
+                )}
+                {urgent && days !== null && (
+                  <span
+                    className="flex items-center gap-1 text-[9px] font-semibold px-2 py-0.5 rounded-full text-white flex-shrink-0"
+                    style={{ backgroundColor: soon ? '#EF4444' : '#F59E0B' }}
+                  >
+                    <Clock className="w-2.5 h-2.5" /> {urgencyLabel(days)}
                   </span>
                 )}
               </div>

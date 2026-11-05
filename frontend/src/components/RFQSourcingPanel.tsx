@@ -78,10 +78,22 @@ const RFQSourcingPanel: React.FC<RFQSourcingPanelProps> = ({ event, autoOpenBatc
 
   const handleCreate = () => {
     if (!supplierName.trim() || selectedItems.length === 0) return;
+
+    // Warn, don't block - a revised item list or a second genuine request to the same
+    // supplier for this event are both legitimate, so this is a heads-up, not a gate.
+    const emailKey = supplierEmail.trim().toLowerCase();
+    const isDuplicateInvite = !!emailKey && getBatchesForEvent(event.id).some(
+      b => b.status !== 'CANCELLED' && b.supplierEmail.trim().toLowerCase() === emailKey
+    );
+
     const batch = createRFQBatch(event, supplierName.trim(), supplierEmail.trim(), selectedItems, message.trim());
     setSupplierName(''); setSupplierEmail(''); setMessage(''); setSelectedItems([]);
     setShowCreate(false);
     setRefreshKey(k => k + 1);
+
+    if (isDuplicateInvite) {
+      toast({ title: 'Heads up', description: `${batch.supplierName} already has an active request for this event.` });
+    }
 
     // Sync to Supabase so supplier can open the portal on any device
     if (user?.id) {
@@ -171,16 +183,16 @@ const RFQSourcingPanel: React.FC<RFQSourcingPanelProps> = ({ event, autoOpenBatc
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-[10px] uppercase tracking-wider text-gray-400 block mb-1">Supplier Name</label>
-              <input value={supplierName} onChange={e => setSupplierName(e.target.value)} placeholder="Supplier name" className="w-full px-3 py-2 text-xs border rounded-lg bg-white" style={{ borderColor: 'rgba(201,162,74,0.2)' }} />
+              <input value={supplierName} onChange={e => setSupplierName(e.target.value)} placeholder="Supplier name" className="w-full px-3 py-2 text-xs border rounded-lg bg-white" style={{ borderColor: 'rgba(201,162,74,0.2)', color: '#1A1A1A' }} />
             </div>
             <div>
               <label className="text-[10px] uppercase tracking-wider text-gray-400 block mb-1">Supplier Email</label>
-              <input value={supplierEmail} onChange={e => setSupplierEmail(e.target.value)} placeholder="supplier@example.com" className="w-full px-3 py-2 text-xs border rounded-lg bg-white" style={{ borderColor: 'rgba(201,162,74,0.2)' }} />
+              <input value={supplierEmail} onChange={e => setSupplierEmail(e.target.value)} placeholder="supplier@example.com" className="w-full px-3 py-2 text-xs border rounded-lg bg-white" style={{ borderColor: 'rgba(201,162,74,0.2)', color: '#1A1A1A' }} />
             </div>
           </div>
           <div>
             <label className="text-[10px] uppercase tracking-wider text-gray-400 block mb-1">Message to Supplier (optional)</label>
-            <textarea value={message} onChange={e => setMessage(e.target.value)} rows={2} placeholder="Any notes for the supplier..." className="w-full px-3 py-2 text-xs border rounded-lg bg-white resize-none" style={{ borderColor: 'rgba(201,162,74,0.2)' }} />
+            <textarea value={message} onChange={e => setMessage(e.target.value)} rows={2} placeholder="Any notes for the supplier..." className="w-full px-3 py-2 text-xs border rounded-lg bg-white resize-none" style={{ borderColor: 'rgba(201,162,74,0.2)', color: '#1A1A1A' }} />
           </div>
 
           {/* Item Selection */}
@@ -363,20 +375,20 @@ const RFQSourcingPanel: React.FC<RFQSourcingPanelProps> = ({ event, autoOpenBatc
               <div className="mb-3">
                 <label className="text-[10px] uppercase tracking-wider text-gray-400 block mb-1">To</label>
                 <div className="flex items-center gap-2">
-                  <input readOnly value={batch.supplierEmail} className="flex-1 px-3 py-2 text-xs border rounded-lg bg-gray-50" style={{ borderColor: '#EFEFEF' }} />
+                  <input readOnly value={batch.supplierEmail} className="flex-1 px-3 py-2 text-xs border rounded-lg bg-gray-50" style={{ borderColor: '#EFEFEF', color: '#1A1A1A' }} />
                   <button onClick={() => copyToClipboard(batch.supplierEmail)} className="p-2 rounded-lg hover:bg-gray-100"><Copy className="w-3.5 h-3.5 text-gray-400" /></button>
                 </div>
               </div>
               <div className="mb-3">
                 <label className="text-[10px] uppercase tracking-wider text-gray-400 block mb-1">Portal Link</label>
                 <div className="flex items-center gap-2">
-                  <input readOnly value={portalUrl} className="flex-1 px-3 py-2 text-xs font-mono border rounded-lg bg-gray-50" style={{ borderColor: '#EFEFEF' }} />
+                  <input readOnly value={portalUrl} className="flex-1 px-3 py-2 text-xs font-mono border rounded-lg bg-gray-50" style={{ borderColor: '#EFEFEF', color: '#1A1A1A' }} />
                   <button onClick={() => copyToClipboard(portalUrl)} className="p-2 rounded-lg hover:bg-gray-100"><Copy className="w-3.5 h-3.5 text-gray-400" /></button>
                 </div>
               </div>
               <div>
                 <label className="text-[10px] uppercase tracking-wider text-gray-400 block mb-1">Email Body</label>
-                <textarea readOnly value={emailBody} rows={10} className="w-full px-3 py-2 text-xs border rounded-lg bg-gray-50 resize-none" style={{ borderColor: '#EFEFEF' }} />
+                <textarea readOnly value={emailBody} rows={10} className="w-full px-3 py-2 text-xs border rounded-lg bg-gray-50 resize-none" style={{ borderColor: '#EFEFEF', color: '#1A1A1A' }} />
                 <button onClick={() => copyToClipboard(emailBody)} className="mt-2 flex items-center gap-1 px-3 py-1.5 text-[10px] font-medium rounded-lg" style={{ backgroundColor: GOLD, color: '#FFF' }}>
                   <Copy className="w-3 h-3" /> Copy Email Body
                 </button>

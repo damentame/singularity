@@ -91,6 +91,78 @@ const FieldWithNA: React.FC<FieldWithNAProps> = ({ label, required, isNA, onNACh
   );
 };
 
+// Phone input component with dial code. Defined at module scope (not inside
+// ServiceProviderWizard) - a component defined inside another component's render body gets a
+// new identity on every render, which makes React unmount and remount it (and its underlying
+// <input>, losing focus) on every keystroke. All its data comes through props, so it doesn't
+// need to live inside the parent's closure.
+const PhoneInput = ({
+  value,
+  dialCode,
+  onValueChange,
+  onDialCodeChange,
+  placeholder,
+  showDropdown,
+  setShowDropdown,
+}: {
+  value: string;
+  dialCode: string;
+  onValueChange: (val: string) => void;
+  onDialCodeChange: (code: string) => void;
+  placeholder: string;
+  showDropdown: boolean;
+  setShowDropdown: (show: boolean) => void;
+}) => (
+  <div className="relative flex">
+    {/* Dial code selector */}
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setShowDropdown(!showDropdown)}
+        className="h-full px-3 py-3 bg-white/5 border border-white/10 border-r-0 rounded-l-xl text-white flex items-center gap-1 hover:bg-white/10 transition-colors min-w-[90px]"
+        style={{ fontFamily: '"Inter", sans-serif' }}
+      >
+        <span className="text-gold font-medium">{dialCode}</span>
+        <ChevronDown className="w-4 h-4 text-white/50" />
+      </button>
+
+      {showDropdown && (
+        <div className="absolute z-50 left-0 top-full mt-1 w-64 bg-[#152238] border border-white/10 rounded-xl shadow-2xl max-h-60 overflow-y-auto">
+          {countries.map((country) => (
+            <button
+              key={country.code}
+              type="button"
+              onClick={() => {
+                onDialCodeChange(country.dialCode);
+                setShowDropdown(false);
+              }}
+              className={`w-full px-4 py-2 text-left hover:bg-white/5 flex items-center justify-between transition-colors text-sm ${
+                dialCode === country.dialCode ? 'bg-gold/10 text-gold' : 'text-white'
+              }`}
+            >
+              <span>{country.name}</span>
+              <span className="text-gold font-medium">{country.dialCode}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+
+    {/* Phone number input */}
+    <input
+      type="tel"
+      value={value}
+      onChange={(e) => {
+        const numericValue = e.target.value.replace(/[^0-9]/g, '');
+        onValueChange(numericValue);
+      }}
+      placeholder={placeholder}
+      className="flex-1 px-4 py-3 bg-white/5 border border-white/10 rounded-r-xl text-white placeholder-white/40 focus:outline-none focus:border-gold/50 transition-colors"
+      style={{ fontFamily: '"Inter", sans-serif' }}
+    />
+  </div>
+);
+
 // Timeout wrapper for async operations
 const withTimeout = <T,>(promise: Promise<T>, ms: number): Promise<T> => {
   const timeout = new Promise<never>((_, reject) =>
@@ -866,74 +938,6 @@ const ServiceProviderWizard: React.FC<ServiceProviderWizardProps> = ({ onClose, 
     corporate: <Building2 className="w-8 h-8" />,
     social: <PartyPopper className="w-8 h-8" />,
   };
-
-  // Phone input component with dial code
-  const PhoneInput = ({ 
-    value, 
-    dialCode, 
-    onValueChange, 
-    onDialCodeChange, 
-    placeholder,
-    showDropdown,
-    setShowDropdown
-  }: {
-    value: string;
-    dialCode: string;
-    onValueChange: (val: string) => void;
-    onDialCodeChange: (code: string) => void;
-    placeholder: string;
-    showDropdown: boolean;
-    setShowDropdown: (show: boolean) => void;
-  }) => (
-    <div className="relative flex">
-      {/* Dial code selector */}
-      <div className="relative">
-        <button
-          type="button"
-          onClick={() => setShowDropdown(!showDropdown)}
-          className="h-full px-3 py-3 bg-white/5 border border-white/10 border-r-0 rounded-l-xl text-white flex items-center gap-1 hover:bg-white/10 transition-colors min-w-[90px]"
-          style={{ fontFamily: '"Inter", sans-serif' }}
-        >
-          <span className="text-gold font-medium">{dialCode}</span>
-          <ChevronDown className="w-4 h-4 text-white/50" />
-        </button>
-        
-        {showDropdown && (
-          <div className="absolute z-50 left-0 top-full mt-1 w-64 bg-[#152238] border border-white/10 rounded-xl shadow-2xl max-h-60 overflow-y-auto">
-            {countries.map((country) => (
-              <button
-                key={country.code}
-                type="button"
-                onClick={() => {
-                  onDialCodeChange(country.dialCode);
-                  setShowDropdown(false);
-                }}
-                className={`w-full px-4 py-2 text-left hover:bg-white/5 flex items-center justify-between transition-colors text-sm ${
-                  dialCode === country.dialCode ? 'bg-gold/10 text-gold' : 'text-white'
-                }`}
-              >
-                <span>{country.name}</span>
-                <span className="text-gold font-medium">{country.dialCode}</span>
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-      
-      {/* Phone number input */}
-      <input
-        type="tel"
-        value={value}
-        onChange={(e) => {
-          const numericValue = e.target.value.replace(/[^0-9]/g, '');
-          onValueChange(numericValue);
-        }}
-        placeholder={placeholder}
-        className="flex-1 px-4 py-3 bg-white/5 border border-white/10 rounded-r-xl text-white placeholder-white/40 focus:outline-none focus:border-gold/50 transition-colors"
-        style={{ fontFamily: '"Inter", sans-serif' }}
-      />
-    </div>
-  );
 
   // ─── SUCCESS SCREEN ───
   if (registrationComplete) {

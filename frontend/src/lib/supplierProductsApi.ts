@@ -13,7 +13,7 @@ export interface SupplierProduct {
   currency: string;
   quantityAvailable: number | null; // null = unlimited / made to order
   color: string;
-  imageUrl: string;
+  imageUrls: string[]; // up to 4, enforced client-side
   isActive: boolean;
   sortOrder: number;
   createdAt: string;
@@ -33,7 +33,7 @@ function rowToProduct(row: any): SupplierProduct {
     currency: row.currency ?? 'ZAR',
     quantityAvailable: row.quantity_available === null ? null : Number(row.quantity_available),
     color: row.color ?? '',
-    imageUrl: row.image_url ?? '',
+    imageUrls: row.image_urls ?? [],
     isActive: row.is_active ?? true,
     sortOrder: row.sort_order ?? 0,
     createdAt: row.created_at,
@@ -64,7 +64,7 @@ export async function createProduct(userId: string, input: CreateProductInput): 
       currency: input.currency,
       quantity_available: input.quantityAvailable,
       color: input.color,
-      image_url: input.imageUrl,
+      image_urls: input.imageUrls,
       is_active: input.isActive,
       sort_order: input.sortOrder,
     })
@@ -84,7 +84,7 @@ export async function updateProduct(id: string, updates: Partial<CreateProductIn
   if (updates.currency !== undefined) patch.currency = updates.currency;
   if (updates.quantityAvailable !== undefined) patch.quantity_available = updates.quantityAvailable;
   if (updates.color !== undefined) patch.color = updates.color;
-  if (updates.imageUrl !== undefined) patch.image_url = updates.imageUrl;
+  if (updates.imageUrls !== undefined) patch.image_urls = updates.imageUrls;
   if (updates.isActive !== undefined) patch.is_active = updates.isActive;
   if (updates.sortOrder !== undefined) patch.sort_order = updates.sortOrder;
 
