@@ -30,7 +30,6 @@ import SupplierDetailsPanel from './SupplierDetailsPanel';
 import MoodBoardBuilder from './MoodBoardBuilder';
 import ServiceProviderWizard from './ServiceProviderWizard';
 import SupplierShell from './supplier/SupplierShell';
-import SupplierMyEvents from './supplier/SupplierMyEvents';
 import MessagesInbox from './MessagesInbox';
 import SearchProviders from './SearchProviders';
 import PlannerDashboard from './PlannerDashboard';
@@ -280,8 +279,6 @@ const AppLayout: React.FC = () => {
         );
       case 'provider-dashboard':
         return <SupplierShell />;
-      case 'supplier-my-events':
-        return <SupplierMyEvents />;
       case 'supplier-messages':
         return <MessagesInbox role="supplier" />;
       case 'coordinator-messages':
