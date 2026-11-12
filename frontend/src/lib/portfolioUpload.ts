@@ -13,36 +13,91 @@ export interface UploadProgress {
   percentage: number;
 }
 
+const ALLOWED_MIME = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
+const EXT_BY_MIME: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+  'image/gif': 'gif',
+};
+const MAX_BYTES = 50 * 1024 * 1024;
+
+function resolveMime(file: File): string {
+  if (file.type && ALLOWED_MIME.has(file.type)) return file.type;
+  const ext = (file.name.split('.').pop() || '').toLowerCase();
+  if (ext === 'jpg' || ext === 'jpeg') return 'image/jpeg';
+  if (ext === 'png') return 'image/png';
+  if (ext === 'webp') return 'image/webp';
+  if (ext === 'gif') return 'image/gif';
+  return file.type || '';
+}
+
+function validateImageFile(file: File): string | null {
+  const mime = resolveMime(file);
+  if (!ALLOWED_MIME.has(mime)) {
+    return 'Use a JPEG, PNG, WebP, or GIF image. HEIC/AVIF files are not supported — convert them first.';
+  }
+  if (file.size > MAX_BYTES) {
+    return 'Image must be under 50 MB.';
+  }
+  return null;
+}
+
 /**
- * Upload a single file to the supplier-media bucket under portfolios/{userId}/
+ * Upload a single file to the supplier-media bucket under portfolios/{authUid}/.
+ * Path must match RLS: folder[1]=portfolios, folder[2]=auth.uid().
  */
 export async function uploadPortfolioImage(
   file: File,
   userId: string,
 ): Promise<UploadResult> {
   try {
-    // Sanitize filename: remove special chars, keep extension
-    const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg';
-    const safeName = file.name
-      .replace(/\.[^/.]+$/, '') // remove extension
-      .replace(/[^a-zA-Z0-9_-]/g, '_') // replace special chars
-      .substring(0, 50); // limit length
-    const uniqueId = `${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
-    const storagePath = `portfolios/${userId}/${uniqueId}-${safeName}.${ext}`;
+    const validationError = validateImageFile(file);
+    if (validationError) {
+      return { url: '', fileName: file.name, error: validationError };
+    }
 
-    const { data, error: uploadError } = await supabase.storage
+    const { data: sessionData } = await supabase.auth.getSession();
+    const authUid = sessionData.session?.user?.id;
+    if (!authUid) {
+      return { url: '', fileName: file.name, error: 'Sign in again to upload photos.' };
+    }
+    if (authUid !== userId) {
+      return { url: '', fileName: file.name, error: 'Upload path does not match the signed-in account.' };
+    }
+
+    const mime = resolveMime(file);
+    const ext = EXT_BY_MIME[mime] || 'jpg';
+    const safeName = file.name
+      .replace(/\.[^/.]+$/, '')
+      .replace(/[^a-zA-Z0-9_-]/g, '_')
+      .substring(0, 50) || 'photo';
+    const uniqueId = `${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+    const storagePath = `portfolios/${authUid}/${uniqueId}-${safeName}.${ext}`;
+
+    const { error: uploadError } = await supabase.storage
       .from('supplier-media')
       .upload(storagePath, file, {
         cacheControl: '3600',
         upsert: false,
+        contentType: mime,
       });
 
     if (uploadError) {
       console.error('Storage upload error:', uploadError);
-      return { url: '', fileName: file.name, error: uploadError.message };
+      const msg = uploadError.message || 'Upload failed';
+      if (/mime|type|not allowed/i.test(msg)) {
+        return { url: '', fileName: file.name, error: 'This image type is not allowed. Use JPEG, PNG, WebP, or GIF.' };
+      }
+      if (/bucket|not found/i.test(msg)) {
+        return { url: '', fileName: file.name, error: 'Media storage is not configured. Contact support.' };
+      }
+      if (/policy|row-level|unauthorized|403/i.test(msg)) {
+        return { url: '', fileName: file.name, error: 'Upload was blocked by storage permissions. Sign out and back in, then try again.' };
+      }
+      return { url: '', fileName: file.name, error: msg };
     }
 
-    // Get the public URL
     const { data: urlData } = supabase.storage
       .from('supplier-media')
       .getPublicUrl(storagePath);
@@ -69,7 +124,7 @@ export async function uploadPortfolioImages(
 
   for (let i = 0; i < files.length; i++) {
     const file = files[i];
-    
+
     onProgress?.({
       current: i + 1,
       total: files.length,
@@ -116,7 +171,6 @@ export async function appendPortfolioUrls(
   newUrls: string[],
 ): Promise<{ success: boolean; allUrls: string[]; error?: string }> {
   try {
-    // First fetch existing URLs
     const { data, error: fetchError } = await supabase
       .from('service_providers')
       .select('portfolio_urls')
@@ -153,7 +207,6 @@ export async function removePortfolioUrl(
   urlToRemove: string,
 ): Promise<{ success: boolean; remainingUrls: string[]; error?: string }> {
   try {
-    // Fetch existing URLs
     const { data, error: fetchError } = await supabase
       .from('service_providers')
       .select('portfolio_urls')
@@ -167,7 +220,6 @@ export async function removePortfolioUrl(
     const existingUrls: string[] = data?.portfolio_urls || [];
     const remainingUrls = existingUrls.filter(u => u !== urlToRemove);
 
-    // Update the record
     const { error: updateError } = await supabase
       .from('service_providers')
       .update({ portfolio_urls: remainingUrls })
@@ -177,7 +229,6 @@ export async function removePortfolioUrl(
       return { success: false, remainingUrls: existingUrls, error: updateError.message };
     }
 
-    // Try to delete from storage (extract path from URL)
     try {
       const bucketUrl = '/supplier-media/';
       const idx = urlToRemove.indexOf(bucketUrl);
@@ -186,7 +237,6 @@ export async function removePortfolioUrl(
         await supabase.storage.from('supplier-media').remove([filePath]);
       }
     } catch {
-      // Storage deletion is best-effort
       console.warn('Could not delete file from storage');
     }
 

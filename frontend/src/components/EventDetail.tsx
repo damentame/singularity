@@ -45,6 +45,7 @@ import ReceiptsTab from './ReceiptsTab';
 import { toast } from '@/components/ui/use-toast';
 import { themeStyle, usePageTheme } from '@/theme/pageTheme';
 import { useAppContext } from '@/contexts/AppContext';
+import { createAndSyncSupplierInvitation } from '@/lib/createSupplierInvitation';
 
 
 const GOLD = 'var(--pt-primary, #C9A24A)';
@@ -69,7 +70,7 @@ const EventDetail: React.FC<EventDetailProps> = ({ eventId, onBack, onGeneratePr
     selectEvent,
     updateEvent,
   } = useEventContext();
-  const { setCurrentView } = useAppContext();
+  const { setCurrentView, user } = useAppContext();
 
 
   const event = events.find((e) => e.id === eventId);
@@ -81,6 +82,7 @@ const EventDetail: React.FC<EventDetailProps> = ({ eventId, onBack, onGeneratePr
   const [rfqTarget, setRfqTarget] = useState<string | null>(null);
   const [rfqEmail, setRfqEmail] = useState('');
   const [rfqName, setRfqName] = useState('');
+  const [hiringSupplier, setHiringSupplier] = useState(false);
   const [versionDesc, setVersionDesc] = useState('');
   const [showSaveVersion, setShowSaveVersion] = useState(false);
   const [showTemplateModal, setShowTemplateModal] = useState(false);
@@ -152,7 +154,7 @@ const EventDetail: React.FC<EventDetailProps> = ({ eventId, onBack, onGeneratePr
     toast({ title: 'Version Saved', description: `Version ${event.currentVersion + 1} saved.` });
   };
 
-  // "Hire My Supplier" - now assigns supplier to line item instead of sending immediately
+  // "Hire My Supplier" — opens the assign + invite modal
   const handleHireSupplier = (lineItemId: string) => {
     setRfqTarget(lineItemId);
     setRfqName('');
@@ -161,63 +163,99 @@ const EventDetail: React.FC<EventDetailProps> = ({ eventId, onBack, onGeneratePr
     setShowRFQ(true);
   };
 
-  // Assign supplier to line item (creates PENDING SupplierAssignment)
-  const handleAssignSupplier = () => {
-    if (!rfqTarget || !rfqName.trim()) return;
+  // Assign supplier and immediately create/sync their invitation
+  const handleAssignSupplier = async () => {
+    if (!rfqTarget || !rfqName.trim() || hiringSupplier) return;
 
-    const now = new Date().toISOString();
-    const newAssignment: SupplierAssignment = {
-      id: `sa-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
-      eventId: event.id,
-      lineItemId: rfqTarget,
-      supplierName: rfqName.trim(),
-      supplierEmail: rfqEmail.trim(),
-      supplierCompanyId: '',
-      status: 'PENDING',
-      acceptedQuoteId: '',
-      notes: '',
-      createdAt: now,
-      updatedAt: now,
-    };
-
-    // Check if this line item already has a pending assignment
-    const existingAssignments = (event.supplierAssignments || []).filter(
-      a => a.lineItemId === rfqTarget && a.status === 'PENDING'
-    );
-
-    let updatedAssignments: SupplierAssignment[];
-    if (existingAssignments.length > 0) {
-      // Replace existing pending assignment
-      updatedAssignments = (event.supplierAssignments || []).map(a =>
-        a.lineItemId === rfqTarget && a.status === 'PENDING'
-          ? { ...a, supplierName: rfqName.trim(), supplierEmail: rfqEmail.trim(), updatedAt: now }
-          : a
-      );
-    } else {
-      updatedAssignments = [...(event.supplierAssignments || []), newAssignment];
+    const supplierName = rfqName.trim();
+    const supplierEmail = rfqEmail.trim();
+    if (!supplierEmail) {
+      toast({
+        title: 'Email required',
+        description: 'Add the supplier login email so they receive the invitation.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    if (!user?.id) {
+      toast({ title: 'Sign in required', description: 'Sign in to hire suppliers.', variant: 'destructive' });
+      return;
     }
 
-    // Also update the line item's supplierAssignmentId
-    const updatedLineItems = event.lineItems.map(li =>
-      li.id === rfqTarget ? { ...li, supplierAssignmentId: newAssignment.id } : li
-    );
+    setHiringSupplier(true);
+    try {
+      const invite = await createAndSyncSupplierInvitation(
+        user.id,
+        event,
+        supplierName,
+        supplierEmail,
+        [rfqTarget],
+      );
+      if (!invite.ok) {
+        toast({
+          title: 'Invitation failed',
+          description: invite.error || 'Could not send the supplier invitation.',
+          variant: 'destructive',
+        });
+        return;
+      }
 
-    updateEvent(event.id, {
-      supplierAssignments: updatedAssignments,
-      lineItems: updatedLineItems,
-    });
+      const now = new Date().toISOString();
+      const newAssignment: SupplierAssignment = {
+        id: `sa-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
+        eventId: event.id,
+        lineItemId: rfqTarget,
+        supplierName,
+        supplierEmail,
+        supplierCompanyId: selectedAppSupplier?.userId || '',
+        status: 'QUOTE_RECEIVED',
+        acceptedQuoteId: '',
+        notes: '',
+        createdAt: now,
+        updatedAt: now,
+      };
 
-    const item = event.lineItems.find(i => i.id === rfqTarget);
-    toast({
-      title: 'Supplier Assigned',
-      description: `${rfqName.trim()} assigned to "${item?.name || 'item'}". Review & send from the Tax Invoice Requests panel.`,
-    });
+      const existingPending = (event.supplierAssignments || []).filter(
+        (a) => a.lineItemId === rfqTarget && (a.status === 'PENDING' || a.status === 'QUOTE_RECEIVED'),
+      );
 
-    setRfqTarget(null);
-    setRfqName('');
-    setRfqEmail('');
-    setSelectedAppSupplier(null);
-    setShowRFQ(false);
+      let updatedAssignments: SupplierAssignment[];
+      if (existingPending.length > 0) {
+        updatedAssignments = (event.supplierAssignments || []).map((a) =>
+          a.lineItemId === rfqTarget && (a.status === 'PENDING' || a.status === 'QUOTE_RECEIVED')
+            ? { ...a, supplierName, supplierEmail, supplierCompanyId: selectedAppSupplier?.userId || a.supplierCompanyId, status: 'QUOTE_RECEIVED', updatedAt: now }
+            : a,
+        );
+      } else {
+        updatedAssignments = [...(event.supplierAssignments || []), newAssignment];
+      }
+
+      const assignmentId = existingPending[0]?.id || newAssignment.id;
+      const updatedLineItems = event.lineItems.map((li) =>
+        li.id === rfqTarget
+          ? { ...li, supplierAssignmentId: assignmentId, rfqSent: true, rfqJobCode: event.quoteNumber || event.jobCode }
+          : li,
+      );
+
+      updateEvent(event.id, {
+        supplierAssignments: updatedAssignments,
+        lineItems: updatedLineItems,
+      });
+
+      const item = event.lineItems.find((i) => i.id === rfqTarget);
+      toast({
+        title: 'Invitation sent',
+        description: `${supplierName} invited for "${item?.name || 'item'}" and can see it in My Invitations.`,
+      });
+
+      setRfqTarget(null);
+      setRfqName('');
+      setRfqEmail('');
+      setSelectedAppSupplier(null);
+      setShowRFQ(false);
+    } finally {
+      setHiringSupplier(false);
+    }
   };
 
 
@@ -657,7 +695,7 @@ const EventDetail: React.FC<EventDetailProps> = ({ eventId, onBack, onGeneratePr
                 <div>
                   <h3 className="text-lg font-light" style={{ fontFamily: '"Playfair Display", Georgia, serif', color: '#1A1A1A' }}>Hire My Supplier</h3>
                   <p className="text-[10px] text-gray-400">
-                    Assign a supplier to this item - requests are bundled and sent together
+                    Assign a supplier and send their invitation immediately
                   </p>
                 </div>
               </div>
@@ -810,7 +848,7 @@ const EventDetail: React.FC<EventDetailProps> = ({ eventId, onBack, onGeneratePr
                       autoFocus />
                   </div>
                   <div>
-                    <label className="text-[10px] uppercase tracking-wider text-gray-400 block mb-1">Supplier Email</label>
+                    <label className="text-[10px] uppercase tracking-wider text-gray-400 block mb-1">Supplier Email *</label>
                     <input type="email" value={rfqEmail} onChange={(e) => setRfqEmail(e.target.value)} placeholder="supplier@example.com"
                       className="w-full px-3 py-2 rounded-lg border text-xs outline-none" style={{ borderColor: '#EFEFEF', color: '#1A1A1A' }}
                       onKeyDown={(e) => { if (e.key === 'Enter') handleAssignSupplier(); }} />
@@ -824,38 +862,30 @@ const EventDetail: React.FC<EventDetailProps> = ({ eventId, onBack, onGeneratePr
                   <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0" style={{ color: GOLD }} />
                   <div className="flex-1 min-w-0">
                     <p className="text-[10px] font-medium truncate" style={{ color: '#1A1A1A' }}>{selectedAppSupplier.businessName}</p>
-                    {selectedAppSupplier.email && (
+                    {selectedAppSupplier.email ? (
                       <p className="text-[9px] text-gray-400 truncate">{selectedAppSupplier.email}</p>
+                    ) : (
+                      <p className="text-[9px] text-amber-600 truncate">This supplier has no login email on file</p>
                     )}
                   </div>
                 </div>
               )}
 
-              {/* How it works */}
               <div className="mt-4 mb-4 p-3 rounded-lg" style={{ backgroundColor: '#FAFAF7', border: '1px solid rgba(0,0,0,0.04)' }}>
-                <p className="text-[10px] font-semibold text-gray-500 mb-2">How bundled quoting works:</p>
-                <div className="space-y-1.5">
-                  <div className="flex items-start gap-2">
-                    <span className="text-[9px] w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0 font-bold" style={{ backgroundColor: 'rgba(201,162,74,0.1)', color: GOLD }}>1</span>
-                    <span className="text-[10px] text-gray-500">Assign suppliers to line items across all moments</span>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <span className="text-[9px] w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0 font-bold" style={{ backgroundColor: 'rgba(201,162,74,0.1)', color: GOLD }}>2</span>
-                    <span className="text-[10px] text-gray-500">Items are automatically grouped by supplier</span>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <span className="text-[9px] w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0 font-bold" style={{ backgroundColor: 'rgba(201,162,74,0.1)', color: GOLD }}>3</span>
-                    <span className="text-[10px] text-gray-500">Review all bundles, then send ONE consolidated request per supplier</span>
-                  </div>
-                </div>
+                <p className="text-[10px] text-gray-500">
+                  Hiring sends the invitation straight away. The supplier will see it under My Invitations when they sign in with this email.
+                </p>
               </div>
 
               <div className="flex gap-2">
-                <button onClick={handleAssignSupplier} disabled={!rfqName.trim()}
+                <button
+                  onClick={handleAssignSupplier}
+                  disabled={!rfqName.trim() || !rfqEmail.trim() || hiringSupplier}
                   className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-medium uppercase tracking-wider transition-all disabled:opacity-40"
-                  style={{ backgroundColor: GOLD, color: '#FFF' }}>
-                  <Plus className="w-3.5 h-3.5" />
-                  {existingAssignment ? 'Update Supplier' : 'Assign Supplier'}
+                  style={{ backgroundColor: GOLD, color: '#FFF' }}
+                >
+                  {hiringSupplier ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                  {hiringSupplier ? 'Sending…' : existingAssignment ? 'Update & Invite' : 'Hire & Invite'}
                 </button>
                 <button onClick={() => setShowRFQ(false)}
                   className="px-4 py-2.5 rounded-lg text-xs text-gray-400 hover:text-gray-600">Cancel</button>

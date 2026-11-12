@@ -221,6 +221,74 @@ export const saveQuoteVersion = (
 
 
 
+/** Upsert a batch (+ optional items) pulled from Supabase into the local store. */
+export const upsertBatchFromSupabase = (
+  batch: RFQBatch,
+  items: RFQBatchItem[] = [],
+): boolean => {
+  const store = loadStore();
+  const existingIdx = store.batches.findIndex(b => b.id === batch.id);
+  let changed = false;
+
+  if (existingIdx < 0) {
+    store.batches.push(batch);
+    changed = true;
+  } else {
+    const prev = store.batches[existingIdx];
+    const merged: RFQBatch = {
+      ...prev,
+      ...batch,
+      // Prefer remote invitation fields and status when present
+      invitationResponse: batch.invitationResponse || prev.invitationResponse || '',
+      invitationRespondedAt: batch.invitationRespondedAt || prev.invitationRespondedAt || '',
+      status: batch.status || prev.status,
+      currentSubmittedVersion: Math.max(prev.currentSubmittedVersion || 0, batch.currentSubmittedVersion || 0),
+      lastSupplierSaveAt: batch.lastSupplierSaveAt || prev.lastSupplierSaveAt || '',
+    };
+    if (JSON.stringify(prev) !== JSON.stringify(merged)) {
+      store.batches[existingIdx] = merged;
+      changed = true;
+    }
+  }
+
+  for (const item of items) {
+    if (!store.batchItems.find(bi => bi.id === item.id)) {
+      store.batchItems.push(item);
+      changed = true;
+    }
+  }
+
+  if (changed) saveStore(store);
+  return changed;
+};
+
+/** Apply invitation accept/decline from Supabase onto a local batch. Returns true if changed. */
+export const applyInvitationResponseFromSupabase = (
+  batchId: string,
+  invitationResponse: '' | 'accepted' | 'declined',
+  invitationRespondedAt: string,
+): boolean => {
+  const store = loadStore();
+  let changed = false;
+  store.batches = store.batches.map(b => {
+    if (b.id !== batchId) return b;
+    if (
+      (b.invitationResponse || '') === (invitationResponse || '') &&
+      (b.invitationRespondedAt || '') === (invitationRespondedAt || '')
+    ) {
+      return b;
+    }
+    changed = true;
+    return {
+      ...b,
+      invitationResponse: invitationResponse || '',
+      invitationRespondedAt: invitationRespondedAt || '',
+    };
+  });
+  if (changed) saveStore(store);
+  return changed;
+};
+
 // ─── Upsert Quote Version from Supabase ─────────────────────────────────────
 // Called by the coordinator-side Supabase pull to write a submitted quote
 // (from the supplier's device) into the local rfqStore without duplicating.

@@ -4,17 +4,19 @@ import { useAppContext } from '@/contexts/AppContext';
 import { supabase } from '@/lib/supabase';
 import { getMyInvitations } from '@/lib/supplierRfqApi';
 import { getUnreadCountsForSupplier } from '@/lib/rfqMessagesApi';
+import { themeStyle, usePageTheme } from '@/theme/pageTheme';
+import { GOLD, MUTED, TEXT, glassCard } from './supplierUi';
 import SupplierInvitationsList from './SupplierInvitationsList';
 import SupplierInvitationDetail from './SupplierInvitationDetail';
 import SupplierCatalogPanel from './SupplierCatalogPanel';
 
-const GOLD = '#C9A24A';
 const BADGE_POLL_MS = 30000;
 
 type Tab = 'invitations' | 'catalog';
 
 const SupplierShell: React.FC = () => {
   const { user, setCurrentView } = useAppContext();
+  const pageTheme = usePageTheme('supplier-dashboard');
   const [tab, setTab] = useState<Tab>('invitations');
   const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
   const [checkingProfile, setCheckingProfile] = useState(true);
@@ -32,9 +34,6 @@ const SupplierShell: React.FC = () => {
       });
   }, [user?.id]);
 
-  // "Things needing attention" badge on the My Invitations tab: unresponded invitations +
-  // unread coordinator/system messages. Refreshes on mount, periodically, and whenever the
-  // supplier returns from a detail view (where they may have just read messages or responded).
   useEffect(() => {
     if (!hasProfile) return;
     const load = () => {
@@ -51,7 +50,7 @@ const SupplierShell: React.FC = () => {
 
   if (checkingProfile) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#FAFAF7' }}>
+      <div className="min-h-screen flex items-center justify-center" style={themeStyle(pageTheme)}>
         <Loader2 className="w-6 h-6 animate-spin" style={{ color: GOLD }} />
       </div>
     );
@@ -59,19 +58,19 @@ const SupplierShell: React.FC = () => {
 
   if (!hasProfile) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-6" style={{ backgroundColor: '#FAFAF7' }}>
-        <div className="max-w-sm text-center">
+      <div className="min-h-screen flex items-center justify-center p-6" style={themeStyle(pageTheme)}>
+        <div className="max-w-sm text-center rounded-2xl p-8" style={glassCard}>
           <Store className="w-8 h-8 mx-auto mb-4" style={{ color: GOLD }} />
-          <h2 className="text-lg font-light mb-2" style={{ fontFamily: '"Playfair Display", Georgia, serif', color: '#1A1A1A' }}>
+          <h2 className="text-lg font-light mb-2" style={{ fontFamily: '"Playfair Display", Georgia, serif', color: TEXT }}>
             Complete Your Registration
           </h2>
-          <p className="text-xs text-gray-400 mb-5">
+          <p className="text-xs mb-5" style={{ color: MUTED }}>
             Set up your supplier profile to start receiving and responding to quote requests.
           </p>
           <button
             onClick={() => setCurrentView('service-provider-registration')}
-            className="px-5 py-2.5 rounded-xl text-sm font-medium text-white"
-            style={{ backgroundColor: GOLD }}
+            className="px-5 py-2.5 rounded-xl text-sm font-medium"
+            style={{ backgroundColor: GOLD, color: 'var(--pt-on-primary, #FFF)' }}
           >
             Complete Registration
           </button>
@@ -81,40 +80,57 @@ const SupplierShell: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: '#FAFAF7' }}>
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8">
-        <div className="mb-6">
-          <h1 className="text-xl font-light" style={{ fontFamily: '"Playfair Display", Georgia, serif', color: '#1A1A1A' }}>
+    <div className="min-h-screen" style={themeStyle(pageTheme)}>
+      <div
+        className="pointer-events-none fixed inset-0 opacity-[0.55]"
+        style={{
+          background:
+            'radial-gradient(ellipse 70% 45% at 15% -10%, color-mix(in srgb, var(--pt-primary, #C9A24A) 18%, transparent), transparent 60%), radial-gradient(ellipse 55% 40% at 95% 5%, color-mix(in srgb, var(--pt-border, #D4CFC6) 55%, transparent), transparent 55%)',
+        }}
+      />
+      <div className="relative max-w-4xl mx-auto px-4 sm:px-6 py-8">
+        <div className="mb-6 rounded-2xl px-5 py-4" style={glassCard}>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] mb-1" style={{ color: GOLD }}>
+            Supplier
+          </p>
+          <h1 className="text-2xl font-light" style={{ fontFamily: '"Playfair Display", Georgia, serif', color: TEXT }}>
             {businessName || 'Supplier Dashboard'}
           </h1>
-          <p className="text-xs text-gray-400 mt-0.5">{user?.email}</p>
+          <p className="text-xs mt-0.5" style={{ color: MUTED }}>{user?.email}</p>
         </div>
 
-        <div className="flex items-center gap-2 mb-6 border-b" style={{ borderColor: 'rgba(201,162,74,0.12)' }}>
+        <div
+          className="flex items-center gap-1 mb-6 p-1 rounded-2xl"
+          style={{ ...glassCard, padding: 4 }}
+        >
           {([
             { key: 'invitations' as Tab, label: 'My Invitations', icon: Inbox },
             { key: 'catalog' as Tab, label: 'Profile & Catalog', icon: Store },
-          ]).map(t => (
-            <button
-              key={t.key}
-              onClick={() => { setTab(t.key); setSelectedBatchId(null); }}
-              className="flex items-center gap-1.5 px-3 py-2.5 text-xs font-medium border-b-2 transition-colors"
-              style={{
-                borderColor: tab === t.key ? GOLD : 'transparent',
-                color: tab === t.key ? GOLD : '#999',
-              }}
-            >
-              <t.icon className="w-3.5 h-3.5" /> {t.label}
-              {t.key === 'invitations' && attentionCount > 0 && (
-                <span
-                  className="flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full text-[9px] font-semibold text-white"
-                  style={{ backgroundColor: '#EF4444' }}
-                >
-                  {attentionCount}
-                </span>
-              )}
-            </button>
-          ))}
+          ]).map(t => {
+            const active = tab === t.key;
+            return (
+              <button
+                key={t.key}
+                onClick={() => { setTab(t.key); setSelectedBatchId(null); }}
+                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 text-xs font-medium rounded-xl transition-all"
+                style={{
+                  backgroundColor: active ? 'color-mix(in srgb, var(--pt-primary, #C9A24A) 14%, transparent)' : 'transparent',
+                  color: active ? GOLD : MUTED,
+                  boxShadow: active ? 'inset 0 1px 0 rgba(255,255,255,0.7)' : 'none',
+                }}
+              >
+                <t.icon className="w-3.5 h-3.5" /> {t.label}
+                {t.key === 'invitations' && attentionCount > 0 && (
+                  <span
+                    className="flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full text-[9px] font-semibold text-white"
+                    style={{ backgroundColor: '#EF4444' }}
+                  >
+                    {attentionCount}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
 
         {tab === 'invitations' && (

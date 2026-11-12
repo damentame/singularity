@@ -3,9 +3,7 @@ import { Package, ChevronRight, Loader2, Inbox, MessageCircle } from 'lucide-rea
 import { getMyInvitations, SupplierInvitation } from '@/lib/supplierRfqApi';
 import { getUnreadCountsForSupplier } from '@/lib/rfqMessagesApi';
 import { RFQ_BATCH_STATUS_LABELS, RFQ_BATCH_STATUS_COLORS } from '@/contexts/EventContext';
-import { getCurrencySymbol } from '@/data/countryConfig';
-
-const GOLD = '#C9A24A';
+import { GOLD, MUTED, TEXT, glassCard, glassCardHover } from './supplierUi';
 
 interface SupplierInvitationsListProps {
   onOpen: (batchId: string) => void;
@@ -18,6 +16,7 @@ const SupplierInvitationsList: React.FC<SupplierInvitationsListProps> = ({ onOpe
   const [invitations, setInvitations] = useState<SupplierInvitation[]>([]);
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -40,10 +39,12 @@ const SupplierInvitationsList: React.FC<SupplierInvitationsListProps> = ({ onOpe
 
   if (invitations.length === 0) {
     return (
-      <div className="text-center py-16">
-        <Inbox className="w-8 h-8 mx-auto mb-3" style={{ color: 'rgba(201,162,74,0.3)' }} />
-        <p className="text-sm text-gray-400">No invitations yet.</p>
-        <p className="text-xs text-gray-300 mt-1">When a coordinator requests a quote from you, it'll show up here.</p>
+      <div className="text-center py-16 rounded-2xl" style={glassCard}>
+        <Inbox className="w-8 h-8 mx-auto mb-3" style={{ color: 'color-mix(in srgb, var(--pt-primary, #C9A24A) 35%, transparent)' }} />
+        <p className="text-sm" style={{ color: MUTED }}>No invitations yet.</p>
+        <p className="text-xs mt-1" style={{ color: MUTED, opacity: 0.75 }}>
+          When a coordinator requests a quote from you, it'll show up here.
+        </p>
       </div>
     );
   }
@@ -52,23 +53,28 @@ const SupplierInvitationsList: React.FC<SupplierInvitationsListProps> = ({ onOpe
     <div className="space-y-3">
       {invitations.map(({ batch, itemCount }) => {
         const ctx = batch.eventContext || {};
-        const sym = getCurrencySymbol(ctx.currency || 'ZAR');
         const needsResponse = !batch.invitationResponse;
         const unread = unreadCounts[batch.id] || 0;
+        const hovered = hoveredId === batch.id;
 
         return (
           <button
             key={batch.id}
             onClick={() => onOpen(batch.id)}
-            className="w-full text-left bg-white rounded-2xl border p-5 transition-all hover:shadow-sm flex items-center gap-4"
-            style={{ borderColor: 'rgba(201,162,74,0.15)' }}
+            onMouseEnter={() => setHoveredId(batch.id)}
+            onMouseLeave={() => setHoveredId(null)}
+            className="w-full text-left rounded-2xl p-5 transition-all flex items-center gap-4"
+            style={hovered ? glassCardHover : glassCard}
           >
-            <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: 'rgba(201,162,74,0.08)' }}>
+            <div
+              className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0"
+              style={{ backgroundColor: 'color-mix(in srgb, var(--pt-primary, #C9A24A) 12%, transparent)' }}
+            >
               <Package className="w-4 h-4" style={{ color: GOLD }} />
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-sm font-semibold truncate" style={{ color: '#1A1A1A' }}>
+                <span className="text-sm font-semibold truncate" style={{ color: TEXT }}>
                   {ctx.quoteNumber || 'Quote pending'}
                 </span>
                 <span
@@ -82,13 +88,18 @@ const SupplierInvitationsList: React.FC<SupplierInvitationsListProps> = ({ onOpe
                     Needs response
                   </span>
                 )}
+                {batch.invitationResponse === 'accepted' && (
+                  <span className="text-[9px] font-semibold px-2 py-0.5 rounded-full text-white flex-shrink-0" style={{ backgroundColor: '#22C55E' }}>
+                    Accepted
+                  </span>
+                )}
                 {unread > 0 && (
                   <span className="flex items-center gap-1 text-[9px] font-semibold px-2 py-0.5 rounded-full text-white flex-shrink-0" style={{ backgroundColor: GOLD }}>
                     <MessageCircle className="w-2.5 h-2.5" /> {unread}
                   </span>
                 )}
               </div>
-              <p className="text-xs text-gray-400 mt-1">
+              <p className="text-xs mt-1" style={{ color: MUTED }}>
                 {formatDate(ctx.date)} · {[ctx.city, ctx.country].filter(Boolean).join(', ') || 'Location TBC'} · {itemCount} item{itemCount !== 1 ? 's' : ''}
               </p>
               {batch.currentSubmittedVersion > 0 && (
@@ -97,7 +108,7 @@ const SupplierInvitationsList: React.FC<SupplierInvitationsListProps> = ({ onOpe
                 </p>
               )}
             </div>
-            <ChevronRight className="w-4 h-4 text-gray-300 flex-shrink-0" />
+            <ChevronRight className="w-4 h-4 flex-shrink-0" style={{ color: MUTED, opacity: 0.5 }} />
           </button>
         );
       })}

@@ -18,8 +18,10 @@ import {
   CATEGORY_LABELS,
   RFQMessage,
 } from '@/contexts/EventContext';
+import { useAppContext } from '@/contexts/AppContext';
 import { getRFQStatusForLineItem } from '@/data/rfqStore';
-
+import { createAndSyncSupplierInvitation } from '@/lib/createSupplierInvitation';
+import { toast } from '@/components/ui/use-toast';
 
 import { useConfigOptions } from '@/hooks/useConfigOptions';
 import CostingTable from './CostingTable';
@@ -95,8 +97,11 @@ const MomentsScheduleBuilder: React.FC<MomentsScheduleBuilderProps> = ({ event, 
     addMoment, updateMoment, removeMoment,
     addVenueSpace, addBackupVenueSpace,
     calculateLineItem, calculateSummary,
+    updateEvent,
   } = useEventContext();
+  const { user } = useAppContext();
   const { options: momentTypeOptions } = useConfigOptions('MOMENT_TYPE');
+  const [sendingInvites, setSendingInvites] = useState(false);
 
   const [activeMomentId, setActiveMomentId] = useState<string | null>(null);
   const [activeDetailTab, setActiveDetailTab] = useState<'costing' | 'moodboard' | 'notes'>('costing');
@@ -670,31 +675,100 @@ const MomentsScheduleBuilder: React.FC<MomentsScheduleBuilderProps> = ({ event, 
           const momentAssignments = (event.supplierAssignments || []).filter(a =>
             momentItems.some(li => li.id === a.lineItemId) && a.status === 'PENDING'
           );
-          const uniqueSuppliers = new Map<string, { name: string; email: string; items: string[] }>();
+          const uniqueSuppliers = new Map<string, { name: string; email: string; items: string[]; lineItemIds: string[]; assignmentIds: string[] }>();
           momentAssignments.forEach(a => {
             const key = `${a.supplierName}|||${a.supplierEmail}`.toLowerCase();
             if (!uniqueSuppliers.has(key)) {
-              uniqueSuppliers.set(key, { name: a.supplierName, email: a.supplierEmail, items: [] });
+              uniqueSuppliers.set(key, { name: a.supplierName, email: a.supplierEmail, items: [], lineItemIds: [], assignmentIds: [] });
             }
+            const entry = uniqueSuppliers.get(key)!;
+            entry.assignmentIds.push(a.id);
             const item = momentItems.find(li => li.id === a.lineItemId);
-            if (item) uniqueSuppliers.get(key)!.items.push(item.name);
+            if (item) {
+              entry.items.push(item.name);
+              entry.lineItemIds.push(item.id);
+            }
           });
 
           const supplierList = Array.from(uniqueSuppliers.values());
-          const supplierEmails = supplierList.filter(s => s.email).map(s => s.email);
 
           if (supplierList.length === 0) return null;
 
-          const handleEmailAllSuppliers = () => {
-            const momentName = isOverall ? 'Overall Event' : activeMoment?.name || 'Event';
-            const quoteRef = event.quoteNumber || 'Pending';
-            const subject = encodeURIComponent(`Quote Request - ${momentName} - ${quoteRef}`);
-            const itemList = supplierList.flatMap(s => s.items.map(i => `  - ${i} (${s.name})`)).join('\n');
-            const body = encodeURIComponent(
-              `Dear Supplier,\n\nWe are requesting quotes for the following items for "${momentName}":\n\n${itemList}\n\nEvent Reference: ${quoteRef}\n\nPlease provide your best pricing at your earliest convenience.\n\nKind regards`
-            );
-            const mailto = `mailto:${supplierEmails.join(',')}?subject=${subject}&body=${body}`;
-            window.open(mailto, '_blank');
+          const handleSendAllInvitations = async () => {
+            if (!user?.id) {
+              toast({ title: 'Sign in required', description: 'Sign in to send supplier invitations.', variant: 'destructive' });
+              return;
+            }
+            setSendingInvites(true);
+            try {
+              const momentName = isOverall ? 'Overall Event' : activeMoment?.name || 'Event';
+              let sent = 0;
+              let failed = 0;
+              let nextAssignments = [...(event.supplierAssignments || [])];
+              let nextLineItems = [...event.lineItems];
+              const sentAssignmentIds = new Set<string>();
+              const sentLineItemIds = new Set<string>();
+
+              for (const supplier of supplierList) {
+                if (!supplier.email.trim()) {
+                  failed += 1;
+                  continue;
+                }
+                const invite = await createAndSyncSupplierInvitation(
+                  user.id,
+                  event,
+                  supplier.name,
+                  supplier.email,
+                  supplier.lineItemIds,
+                  `Quote request for ${momentName}`,
+                );
+                if (!invite.ok) {
+                  failed += 1;
+                  continue;
+                }
+                sent += 1;
+                supplier.assignmentIds.forEach((id) => sentAssignmentIds.add(id));
+                supplier.lineItemIds.forEach((id) => sentLineItemIds.add(id));
+              }
+
+              if (sentAssignmentIds.size > 0) {
+                const nowIso = new Date().toISOString();
+                nextAssignments = nextAssignments.map((a) =>
+                  sentAssignmentIds.has(a.id)
+                    ? { ...a, status: 'QUOTE_RECEIVED' as const, updatedAt: nowIso }
+                    : a,
+                );
+                nextLineItems = nextLineItems.map((li) =>
+                  sentLineItemIds.has(li.id)
+                    ? { ...li, rfqSent: true, rfqJobCode: event.quoteNumber || event.jobCode }
+                    : li,
+                );
+                updateEvent(event.id, {
+                  supplierAssignments: nextAssignments,
+                  lineItems: nextLineItems,
+                });
+              }
+
+              if (sent > 0 && failed === 0) {
+                toast({
+                  title: 'Invitations sent',
+                  description: `${sent} supplier${sent === 1 ? '' : 's'} can now see this request in My Invitations.`,
+                });
+              } else if (sent > 0) {
+                toast({
+                  title: 'Some invitations sent',
+                  description: `${sent} sent, ${failed} failed. Suppliers need a valid email that matches their login.`,
+                });
+              } else {
+                toast({
+                  title: 'No invitations sent',
+                  description: 'Each supplier needs an email address matching their supplier account login.',
+                  variant: 'destructive',
+                });
+              }
+            } finally {
+              setSendingInvites(false);
+            }
           };
 
           return (
@@ -704,19 +778,20 @@ const MomentsScheduleBuilder: React.FC<MomentsScheduleBuilderProps> = ({ event, 
                   <div className="flex items-center gap-2">
                     <Mail className="w-4 h-4 text-blue-500" />
                     <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-blue-600">
-                      Email Suppliers
+                      Invite Suppliers
                     </span>
                     <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-500 font-medium">
                       {supplierList.length} supplier{supplierList.length !== 1 ? 's' : ''}
                     </span>
                   </div>
                   <button
-                    onClick={handleEmailAllSuppliers}
-                    className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold uppercase tracking-wider transition-all hover:shadow-md"
+                    onClick={handleSendAllInvitations}
+                    disabled={sendingInvites}
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold uppercase tracking-wider transition-all hover:shadow-md disabled:opacity-60"
                     style={{ backgroundColor: '#3B82F6', color: '#FFF' }}
                   >
-                    <Mail className="w-3.5 h-3.5" />
-                    Email All Suppliers
+                    <Send className="w-3.5 h-3.5" />
+                    {sendingInvites ? 'Sending…' : 'Send Invitations'}
                   </button>
                 </div>
 

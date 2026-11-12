@@ -14,13 +14,12 @@ import {
   AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle,
   AlertDialogDescription, AlertDialogFooter, AlertDialogAction, AlertDialogCancel,
 } from '@/components/ui/alert-dialog';
+import { ALLOWED_IMAGE_ACCEPT, GOLD, MUTED, TEXT, glassCard } from './supplierUi';
 
 // Deduped from the app's own per-country finance config, rather than a separate hardcoded list.
 const CURRENCY_OPTIONS = Array.from(
   new Map(COUNTRY_FINANCE_CONFIGS.map(c => [c.currencyIso, c.currencySymbol])).entries()
 );
-
-const GOLD = '#C9A24A';
 
 const emptyForm: CreateProductInput = {
   name: '', description: '', category: '', unitPrice: 0, currency: 'ZAR',
@@ -86,10 +85,6 @@ const SupplierCatalogPanel: React.FC = () => {
 
   const handleImageSelect = async (file: File | null) => {
     if (!file || !user?.id) return;
-    if (!file.type.startsWith('image/')) {
-      toast({ title: 'Invalid file', description: 'Please choose an image file.', variant: 'destructive' });
-      return;
-    }
     setUploadingImage(true);
     try {
       const result = await uploadPortfolioImage(file, user.id);
@@ -156,49 +151,49 @@ const SupplierCatalogPanel: React.FC = () => {
 
   return (
     <div className="space-y-5">
-      <div className="bg-white rounded-2xl border p-6" style={{ borderColor: 'rgba(201,162,74,0.15)' }}>
+      <div className="rounded-2xl p-6" style={glassCard}>
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-[10px] font-semibold uppercase tracking-[0.15em]" style={{ color: GOLD }}>
             <Package className="w-3.5 h-3.5 inline mr-1.5" /> Products &amp; Pricing
           </h3>
           {!showForm && (
-            <button onClick={startAdd} className="flex items-center gap-1 text-[10px] font-medium px-3 py-1.5 rounded-lg border transition-all hover:shadow-sm" style={{ borderColor: 'rgba(201,162,74,0.3)', color: GOLD }}>
+            <button onClick={startAdd} className="flex items-center gap-1 text-[10px] font-medium px-3 py-1.5 rounded-lg border transition-all hover:shadow-sm" style={{ borderColor: 'color-mix(in srgb, var(--pt-primary, #C9A24A) 35%, transparent)', color: GOLD }}>
               <Plus className="w-3 h-3" /> Add Product
             </button>
           )}
         </div>
 
         {products.length === 0 && !showForm && (
-          <p className="text-xs text-gray-400 text-center py-8">No products yet. Add what you offer, with pricing and what you can supply.</p>
+          <p className="text-xs text-center py-8" style={{ color: MUTED }}>No products yet. Add what you offer, with pricing and what you can supply.</p>
         )}
 
         <div className="space-y-2">
           {products.map(p => (
-            <div key={p.id} className="flex items-center justify-between p-3.5 rounded-xl border" style={{ borderColor: 'rgba(0,0,0,0.06)', backgroundColor: '#FAFAF7' }}>
+            <div key={p.id} className="flex items-center justify-between p-3.5 rounded-xl" style={{ border: '1px solid var(--pt-border, #D4CFC6)', backgroundColor: 'color-mix(in srgb, var(--pt-surface, #FFFCF7) 70%, transparent)' }}>
               <div className="flex items-center gap-3 min-w-0">
                 {p.imageUrl ? (
-                  <img src={p.imageUrl} alt={p.name} className="w-10 h-10 rounded-lg object-cover flex-shrink-0 border" style={{ borderColor: 'rgba(0,0,0,0.06)' }} />
+                  <img src={p.imageUrl} alt={p.name} className="w-10 h-10 rounded-lg object-cover flex-shrink-0 border" style={{ borderColor: 'var(--pt-border, #D4CFC6)' }} />
                 ) : (
-                  <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: 'rgba(201,162,74,0.08)' }}>
+                  <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: 'color-mix(in srgb, var(--pt-primary, #C9A24A) 12%, transparent)' }}>
                     <Package className="w-4 h-4" style={{ color: GOLD }} />
                   </div>
                 )}
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-xs font-medium" style={{ color: '#1A1A1A' }}>{p.name}</span>
-                    {p.category && <span className="text-[9px] text-gray-400">{p.category}</span>}
-                    {p.color && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500">{p.color}</span>}
-                    {!p.isActive && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-gray-200 text-gray-500">Inactive</span>}
+                    <span className="text-xs font-medium" style={{ color: TEXT }}>{p.name}</span>
+                    {p.category && <span className="text-[9px]" style={{ color: MUTED }}>{p.category}</span>}
+                    {p.color && <span className="text-[9px] px-1.5 py-0.5 rounded-full" style={{ backgroundColor: 'rgba(0,0,0,0.04)', color: MUTED }}>{p.color}</span>}
+                    {!p.isActive && <span className="text-[9px] px-1.5 py-0.5 rounded-full" style={{ backgroundColor: 'rgba(0,0,0,0.06)', color: MUTED }}>Inactive</span>}
                   </div>
-                  <p className="text-[10px] text-gray-400 mt-0.5">
+                  <p className="text-[10px] mt-0.5" style={{ color: MUTED }}>
                     {getCurrencySymbol(p.currency)} {p.unitPrice.toLocaleString('en-ZA', { maximumFractionDigits: 2 })}
                     {p.quantityAvailable !== null ? ` · ${p.quantityAvailable} available` : ' · made to order'}
                   </p>
-                  {p.description && <p className="text-[10px] text-gray-400 mt-0.5">{p.description}</p>}
+                  {p.description && <p className="text-[10px] mt-0.5" style={{ color: MUTED }}>{p.description}</p>}
                 </div>
               </div>
               <div className="flex items-center gap-1 flex-shrink-0">
-                <button onClick={() => startEdit(p)} className="p-1.5 rounded-lg hover:bg-black/5 transition-colors"><Pencil className="w-3 h-3 text-gray-400" /></button>
+                <button onClick={() => startEdit(p)} className="p-1.5 rounded-lg hover:bg-black/5 transition-colors"><Pencil className="w-3 h-3" style={{ color: MUTED }} /></button>
                 <button onClick={() => handleDelete(p)} className="p-1.5 rounded-lg hover:bg-red-50 transition-colors group"><Trash2 className="w-3 h-3 text-gray-300 group-hover:text-red-500" /></button>
               </div>
             </div>
@@ -206,10 +201,10 @@ const SupplierCatalogPanel: React.FC = () => {
         </div>
 
         {showForm && (
-          <div className="mt-4 p-4 rounded-xl border space-y-3" style={{ borderColor: 'rgba(201,162,74,0.25)', backgroundColor: 'rgba(201,162,74,0.03)' }}>
+          <div className="mt-4 p-4 rounded-xl space-y-3" style={{ border: '1px solid color-mix(in srgb, var(--pt-primary, #C9A24A) 28%, transparent)', backgroundColor: 'color-mix(in srgb, var(--pt-primary, #C9A24A) 6%, transparent)' }}>
             <div className="flex items-center justify-between">
               <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: GOLD }}>{editingId ? 'Edit Product' : 'New Product'}</p>
-              <button onClick={() => setShowForm(false)}><X className="w-3.5 h-3.5 text-gray-400" /></button>
+              <button onClick={() => setShowForm(false)}><X className="w-3.5 h-3.5" style={{ color: MUTED }} /></button>
             </div>
             <div className="flex items-center gap-3">
               <button
@@ -217,7 +212,7 @@ const SupplierCatalogPanel: React.FC = () => {
                 onClick={() => imageInputRef.current?.click()}
                 disabled={uploadingImage}
                 className="relative w-16 h-16 rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden border disabled:opacity-60"
-                style={{ borderColor: 'rgba(201,162,74,0.25)', backgroundColor: form.imageUrl ? 'transparent' : 'rgba(201,162,74,0.05)' }}
+                style={{ borderColor: 'color-mix(in srgb, var(--pt-primary, #C9A24A) 28%, transparent)', backgroundColor: form.imageUrl ? 'transparent' : 'color-mix(in srgb, var(--pt-primary, #C9A24A) 8%, transparent)' }}
               >
                 {uploadingImage ? (
                   <Loader2 className="w-4 h-4 animate-spin" style={{ color: GOLD }} />
@@ -227,12 +222,12 @@ const SupplierCatalogPanel: React.FC = () => {
                   <Camera className="w-4 h-4" style={{ color: GOLD }} />
                 )}
               </button>
-              <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={e => handleImageSelect(e.target.files?.[0] || null)} />
-              <div className="flex-1 text-[10px] text-gray-400">
+              <input ref={imageInputRef} type="file" accept={ALLOWED_IMAGE_ACCEPT} className="hidden" onChange={e => handleImageSelect(e.target.files?.[0] || null)} />
+              <div className="flex-1 text-[10px]" style={{ color: MUTED }}>
                 {form.imageUrl ? (
                   <button type="button" onClick={handleRemoveImage} className="text-red-400 hover:text-red-500">Remove photo</button>
                 ) : (
-                  'Add a photo of this product (optional)'
+                  'JPEG, PNG, WebP, or GIF (optional)'
                 )}
               </div>
             </div>
@@ -288,9 +283,9 @@ const SupplierCatalogPanel: React.FC = () => {
 
       <SupplierPhotosPanel />
 
-      <div className="bg-white rounded-2xl border p-6" style={{ borderColor: 'rgba(201,162,74,0.15)' }}>
+      <div className="rounded-2xl p-6" style={glassCard}>
         <h3 className="text-[10px] font-semibold uppercase tracking-[0.15em] mb-3" style={{ color: GOLD }}>Special Requests</h3>
-        <label className="flex items-center gap-2 text-xs text-gray-600 mb-3">
+        <label className="flex items-center gap-2 text-xs mb-3" style={{ color: MUTED }}>
           <input type="checkbox" checked={acceptsSpecialRequests} onChange={e => setAcceptsSpecialRequests(e.target.checked)} />
           I'm open to custom or bespoke requests outside my standard catalog
         </label>
@@ -298,14 +293,15 @@ const SupplierCatalogPanel: React.FC = () => {
           <textarea
             value={specialRequestNotes} onChange={e => setSpecialRequestNotes(e.target.value)} rows={2}
             placeholder="Anything coordinators should know before asking (lead time, limitations, etc.)"
-            className="w-full px-3 py-2 text-xs border rounded-lg resize-none mb-3" style={{ borderColor: 'rgba(201,162,74,0.2)' }}
+            className="w-full px-3 py-2 text-xs border rounded-lg resize-none mb-3"
+            style={{ borderColor: 'var(--pt-border, #D4CFC6)', backgroundColor: 'var(--pt-surface, #FFFCF7)' }}
           />
         )}
-        <p className="text-[9px] text-gray-300 italic mb-3">A coordinator with a special request will reach you the same way as any other quote request - through your invitation's chat.</p>
+        <p className="text-[9px] italic mb-3" style={{ color: MUTED, opacity: 0.7 }}>A coordinator with a special request will reach you the same way as any other quote request - through your invitation's chat.</p>
         <button
           onClick={handleSaveSpecialRequests} disabled={savingRequests}
-          className="px-3.5 py-1.5 rounded-lg text-xs font-medium text-white disabled:opacity-50"
-          style={{ backgroundColor: GOLD }}
+          className="px-3.5 py-1.5 rounded-lg text-xs font-medium disabled:opacity-50"
+          style={{ backgroundColor: GOLD, color: 'var(--pt-on-primary, #FFF)' }}
         >
           Save
         </button>

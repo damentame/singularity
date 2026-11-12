@@ -10,13 +10,14 @@ import {
 } from '@/contexts/EventContext';
 import {
   getBatchesForEvent, getItemsForBatch, getQuoteVersionsForBatch,
-  createRFQBatch, updateBatchStatus, cancelBatch, acceptQuoteVersion,
+  updateBatchStatus, cancelBatch, acceptQuoteVersion,
   getPortalUrl, isLineItemInActiveBatch, getLatestSubmitted,
 } from '@/data/rfqStore';
 import { getCurrencySymbol, formatCurrency } from '@/data/countryConfig';
 import { toast } from '@/components/ui/use-toast';
 import { useAppContext } from '@/contexts/AppContext';
-import { syncRFQBatch, syncBatchStatus, pullQuotesFromSupabase } from '@/lib/rfqSupabaseSync';
+import { syncBatchStatus, pullQuotesFromSupabase, pullInvitationResponses, pullBatchesFromSupabase } from '@/lib/rfqSupabaseSync';
+import { createAndSyncSupplierInvitation } from '@/lib/createSupplierInvitation';
 import { getUnreadCountsByBatch, sendSystemMessage } from '@/lib/rfqMessagesApi';
 import RFQMessageThread from './RFQMessageThread';
 
@@ -50,13 +51,37 @@ const RFQSourcingPanel: React.FC<RFQSourcingPanelProps> = ({ event, autoOpenBatc
     getUnreadCountsByBatch(user.id).then(setUnreadCounts);
   }, [user?.id, refreshKey]);
 
+  // Hydrate local batches from Supabase (seeded + cross-device) and keep invitation responses fresh.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const [batches, invites, quotes] = await Promise.all([
+        pullBatchesFromSupabase(event.id),
+        pullInvitationResponses(event.id),
+        pullQuotesFromSupabase(event.id),
+      ]);
+      if (!cancelled && (batches > 0 || invites > 0 || quotes > 0)) setRefreshKey(k => k + 1);
+    })();
+    const interval = setInterval(async () => {
+      const [batches, invites] = await Promise.all([
+        pullBatchesFromSupabase(event.id),
+        pullInvitationResponses(event.id),
+      ]);
+      if (batches > 0 || invites > 0) setRefreshKey(k => k + 1);
+    }, 15000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [event.id]);
+
   // Opening a thread pulls any submitted quote down from Supabase first, so the Approve
   // banner reflects reality even if the coordinator hasn't separately visited the Compare
   // tab (previously the only place that called pullQuotesFromSupabase).
   const openMessageThread = async (batch: RFQBatch) => {
     setMessageThreadBatch(batch);
-    const n = await pullQuotesFromSupabase(event.id);
-    if (n > 0) setRefreshKey(k => k + 1);
+    const [quotes, invites] = await Promise.all([
+      pullQuotesFromSupabase(event.id),
+      pullInvitationResponses(event.id),
+    ]);
+    if (quotes > 0 || invites > 0) setRefreshKey(k => k + 1);
   };
 
   // Only reacts to autoOpenBatchId itself (not `batches`, which gets a new
@@ -76,26 +101,46 @@ const RFQSourcingPanel: React.FC<RFQSourcingPanelProps> = ({ event, autoOpenBatc
     setSelectedItems(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
   };
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     if (!supplierName.trim() || selectedItems.length === 0) return;
-    const batch = createRFQBatch(event, supplierName.trim(), supplierEmail.trim(), selectedItems, message.trim());
-    setSupplierName(''); setSupplierEmail(''); setMessage(''); setSelectedItems([]);
-    setShowCreate(false);
-    setRefreshKey(k => k + 1);
-
-    // Sync to Supabase so supplier can open the portal on any device
-    if (user?.id) {
-      syncRFQBatch(user.id, batch, getItemsForBatch(batch.id), event);
+    if (!user?.id) {
+      toast({ title: 'Sign in required', description: 'Sign in to create supplier invitations.', variant: 'destructive' });
+      return;
+    }
+    if (!supplierEmail.trim()) {
+      toast({
+        title: 'Email required',
+        description: 'Add the supplier login email so they can see this invitation.',
+        variant: 'destructive',
+      });
+      return;
     }
 
-    // Log activity
+    const name = supplierName.trim();
+    const email = supplierEmail.trim();
+    const items = [...selectedItems];
+    const note = message.trim();
+    setSupplierName(''); setSupplierEmail(''); setMessage(''); setSelectedItems([]);
+    setShowCreate(false);
+
+    const invite = await createAndSyncSupplierInvitation(user.id, event, name, email, items, note);
+    setRefreshKey(k => k + 1);
+
+    if (!invite.ok) {
+      toast({ title: 'Invitation failed', description: invite.error || 'Could not create invitation.', variant: 'destructive' });
+      return;
+    }
+
     const logEntry = {
       id: `log-${Date.now()}`, eventId: event.id, action: 'RFQ_BATCH_CREATED',
-      details: `RFQ batch created for ${supplierName.trim()} with ${selectedItems.length} items`,
+      details: `RFQ invitation created for ${name} with ${items.length} items`,
       actor: 'Coordinator', timestamp: new Date().toISOString(),
     };
     updateEvent(event.id, { activityLog: [...(event.activityLog || []), logEntry] });
-    toast({ title: 'RFQ Batch Created', description: `${selectedItems.length} items for ${supplierName.trim()}` });
+    toast({
+      title: 'Invitation sent',
+      description: `${name} can now see ${items.length} item${items.length === 1 ? '' : 's'} in My Invitations.`,
+    });
   };
 
   const handleSend = (batchId: string) => {
@@ -238,15 +283,36 @@ const RFQSourcingPanel: React.FC<RFQSourcingPanelProps> = ({ event, autoOpenBatc
                   <div className="flex items-center gap-3 min-w-0">
                     {isExpanded ? <ChevronDown className="w-4 h-4 flex-shrink-0" style={{ color: GOLD }} /> : <ChevronRight className="w-4 h-4 flex-shrink-0" style={{ color: GOLD }} />}
                     <div className="min-w-0">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-xs font-semibold" style={{ color: '#1A1A1A' }}>{batch.supplierName}</span>
                         <span className="text-[9px] font-medium px-2 py-0.5 rounded-full text-white" style={{ backgroundColor: RFQ_BATCH_STATUS_COLORS[batch.status] }}>
                           {RFQ_BATCH_STATUS_LABELS[batch.status]}
                         </span>
+                        {batch.invitationResponse === 'accepted' && (
+                          <span className="text-[9px] font-semibold px-2 py-0.5 rounded-full text-white" style={{ backgroundColor: '#22C55E' }}>
+                            Invite accepted
+                          </span>
+                        )}
+                        {batch.invitationResponse === 'declined' && (
+                          <span className="text-[9px] font-semibold px-2 py-0.5 rounded-full text-white" style={{ backgroundColor: '#EF4444' }}>
+                            Invite declined
+                          </span>
+                        )}
+                        {!batch.invitationResponse && batch.status !== 'CANCELLED' && batch.status !== 'DRAFT' && (
+                          <span className="text-[9px] font-medium px-2 py-0.5 rounded-full" style={{ backgroundColor: 'rgba(201,162,74,0.12)', color: GOLD }}>
+                            Awaiting response
+                          </span>
+                        )}
                       </div>
                       <div className="flex items-center gap-3 mt-0.5 text-[10px] text-gray-400">
                         <span>{items.length} items</span>
                         {batch.sentAt && <span>Sent: {new Date(batch.sentAt).toLocaleDateString()}</span>}
+                        {batch.invitationRespondedAt && (
+                          <span>
+                            {batch.invitationResponse === 'accepted' ? 'Accepted' : 'Declined'}:{' '}
+                            {new Date(batch.invitationRespondedAt).toLocaleString()}
+                          </span>
+                        )}
                         {latestSubmitted && <span>Quoted: v{latestSubmitted.versionNumber} - {fmt(latestSubmitted.totals.gross)}</span>}
                         {batch.lastSupplierSaveAt && <span><Clock className="w-2.5 h-2.5 inline" /> Last save: {new Date(batch.lastSupplierSaveAt).toLocaleString()}</span>}
                       </div>

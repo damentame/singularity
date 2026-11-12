@@ -8,8 +8,7 @@ import { getCurrencySymbol, formatCurrency } from '@/data/countryConfig';
 import { useAppContext } from '@/contexts/AppContext';
 import { toast } from '@/components/ui/use-toast';
 import RFQMessageThread from '@/components/RFQMessageThread';
-
-const GOLD = '#C9A24A';
+import { GOLD, MUTED, TEXT, glassCard } from './supplierUi';
 
 interface SupplierInvitationDetailProps {
   batchId: string;
@@ -87,7 +86,15 @@ const SupplierInvitationDetail: React.FC<SupplierInvitationDetailProps> = ({ bat
     setResponding(true);
     const ok = await respondToInvitation(batchId, response);
     if (ok) {
-      toast({ title: response === 'accepted' ? 'Invitation accepted' : 'Invitation declined' });
+      const supplierLabel = data?.batch.supplierName || user?.name || 'Supplier';
+      const notice = response === 'accepted'
+        ? `✅ ${supplierLabel} accepted this invitation and will prepare a quote.`
+        : `❌ ${supplierLabel} declined this invitation.`;
+      await sendSystemMessage(batchId, notice);
+      toast({
+        title: response === 'accepted' ? 'Invitation accepted' : 'Invitation declined',
+        description: 'The coordinator has been notified.',
+      });
       await load();
     } else {
       toast({ title: 'Something went wrong', variant: 'destructive' });
@@ -161,53 +168,60 @@ const SupplierInvitationDetail: React.FC<SupplierInvitationDetailProps> = ({ bat
 
   return (
     <div className="space-y-5">
-      <button onClick={onBack} className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 transition-colors">
+      <button onClick={onBack} className="flex items-center gap-1.5 text-xs transition-colors" style={{ color: MUTED }}>
         <ArrowLeft className="w-3.5 h-3.5" /> My Invitations
       </button>
 
-      <div className="bg-white rounded-2xl border p-6" style={{ borderColor: 'rgba(201,162,74,0.15)' }}>
+      <div className="rounded-2xl p-6" style={glassCard}>
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <div>
-            <h2 className="text-lg font-light" style={{ fontFamily: '"Playfair Display", Georgia, serif', color: '#1A1A1A' }}>
+            <h2 className="text-lg font-light" style={{ fontFamily: '"Playfair Display", Georgia, serif', color: TEXT }}>
               {ctx.quoteNumber || 'Quote Request'}
             </h2>
-            <p className="text-xs text-gray-400 mt-1">
+            <p className="text-xs mt-1" style={{ color: MUTED }}>
               {formatDate(ctx.date)} · {[ctx.city, ctx.country].filter(Boolean).join(', ') || 'Location TBC'}
             </p>
           </div>
-          <span className="text-[10px] font-medium px-2.5 py-1 rounded-full text-white" style={{ backgroundColor: RFQ_BATCH_STATUS_COLORS[batch.status] }}>
-            {RFQ_BATCH_STATUS_LABELS[batch.status]}
-          </span>
+          <div className="flex flex-col items-end gap-1.5">
+            <span className="text-[10px] font-medium px-2.5 py-1 rounded-full text-white" style={{ backgroundColor: RFQ_BATCH_STATUS_COLORS[batch.status] }}>
+              {RFQ_BATCH_STATUS_LABELS[batch.status]}
+            </span>
+            {batch.invitationResponse === 'accepted' && (
+              <span className="text-[9px] font-semibold px-2 py-0.5 rounded-full text-white" style={{ backgroundColor: '#22C55E' }}>
+                Invite accepted
+              </span>
+            )}
+          </div>
         </div>
 
         {batch.messageToSupplier && (
-          <div className="mt-4 p-3 rounded-xl" style={{ backgroundColor: '#FFFBEB', border: '1px solid #FDE68A' }}>
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-amber-600">Note from the coordinator</p>
-            <p className="text-xs text-amber-800 mt-1">{batch.messageToSupplier}</p>
+          <div className="mt-4 p-3 rounded-xl" style={{ backgroundColor: 'color-mix(in srgb, var(--pt-primary, #C9A24A) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--pt-primary, #C9A24A) 28%, transparent)' }}>
+            <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: GOLD }}>Note from the coordinator</p>
+            <p className="text-xs mt-1" style={{ color: TEXT }}>{batch.messageToSupplier}</p>
           </div>
         )}
 
         {batch.status === 'CANCELLED' && (
-          <div className="mt-4 p-3 rounded-xl" style={{ backgroundColor: '#F3F4F6', border: '1px solid #E5E7EB' }}>
-            <p className="text-xs text-gray-600">This request has been cancelled by the coordinator - no further action is needed.</p>
+          <div className="mt-4 p-3 rounded-xl" style={{ backgroundColor: 'rgba(0,0,0,0.03)', border: '1px solid var(--pt-border, #D4CFC6)' }}>
+            <p className="text-xs" style={{ color: MUTED }}>This request has been cancelled by the coordinator - no further action is needed.</p>
           </div>
         )}
 
         <button
           type="button"
           onClick={() => setShowMessages(true)}
-          className="mt-4 w-full flex items-center justify-between p-3.5 rounded-xl border transition-colors hover:bg-gray-50"
-          style={{ borderColor: 'rgba(201,162,74,0.15)' }}
+          className="mt-4 w-full flex items-center justify-between p-3.5 rounded-xl transition-colors"
+          style={{ border: '1px solid var(--pt-border, #D4CFC6)', backgroundColor: 'color-mix(in srgb, var(--pt-surface, #FFFCF7) 70%, transparent)' }}
         >
-          <span className="flex items-center gap-2 text-xs font-medium" style={{ color: '#1A1A1A' }}>
+          <span className="flex items-center gap-2 text-xs font-medium" style={{ color: TEXT }}>
             <MessageCircle className="w-4 h-4" style={{ color: GOLD }} /> Message the Coordinator
           </span>
         </button>
       </div>
 
       {!batch.invitationResponse && batch.status !== 'CANCELLED' && (
-        <div className="bg-white rounded-2xl border p-6" style={{ borderColor: 'rgba(201,162,74,0.15)' }}>
-          <p className="text-xs text-gray-500 mb-3">Will you quote on this request?</p>
+        <div className="rounded-2xl p-6" style={glassCard}>
+          <p className="text-xs mb-3" style={{ color: MUTED }}>Will you quote on this request?</p>
           <div className="flex gap-2">
             <button
               type="button" disabled={responding} onClick={() => handleRespond('accepted')}
@@ -227,8 +241,8 @@ const SupplierInvitationDetail: React.FC<SupplierInvitationDetailProps> = ({ bat
       )}
 
       {batch.invitationResponse === 'declined' ? (
-        <div className="bg-white rounded-2xl border p-6 text-center" style={{ borderColor: 'rgba(201,162,74,0.15)' }}>
-          <p className="text-xs text-gray-400">You declined this invitation.</p>
+        <div className="rounded-2xl p-6 text-center" style={glassCard}>
+          <p className="text-xs" style={{ color: MUTED }}>You declined this invitation.</p>
           <button
             type="button" disabled={responding} onClick={() => handleRespond('accepted')}
             className="mt-3 text-xs font-medium disabled:opacity-50"
@@ -238,7 +252,7 @@ const SupplierInvitationDetail: React.FC<SupplierInvitationDetailProps> = ({ bat
           </button>
         </div>
       ) : (
-        <div className="bg-white rounded-2xl border p-6" style={{ borderColor: 'rgba(201,162,74,0.15)' }}>
+        <div className="rounded-2xl p-6" style={glassCard}>
           <h3 className="text-[10px] font-semibold uppercase tracking-[0.15em] mb-4" style={{ color: GOLD }}>
             <Package className="w-3.5 h-3.5 inline mr-1.5" /> Items ({batchItems.length})
           </h3>
@@ -247,26 +261,26 @@ const SupplierInvitationDetail: React.FC<SupplierInvitationDetailProps> = ({ bat
             {batchItems.map(bi => {
               const p = prices[bi.id] || emptyDraft(true);
               return (
-                <div key={bi.id} className="p-4 rounded-xl border" style={{ borderColor: 'rgba(0,0,0,0.06)', backgroundColor: '#FAFAF7' }}>
+                <div key={bi.id} className="p-4 rounded-xl" style={{ border: '1px solid var(--pt-border, #D4CFC6)', backgroundColor: 'color-mix(in srgb, var(--pt-surface, #FFFCF7) 75%, transparent)' }}>
                   <div className="flex items-center justify-between mb-2.5">
-                    <span className="text-xs font-medium" style={{ color: '#1A1A1A' }}>{bi.itemNameSnapshot}</span>
-                    <span className="text-[10px] text-gray-400">Qty: {bi.qtySnapshot}</span>
+                    <span className="text-xs font-medium" style={{ color: TEXT }}>{bi.itemNameSnapshot}</span>
+                    <span className="text-[10px]" style={{ color: MUTED }}>Qty: {bi.qtySnapshot}</span>
                   </div>
-                  {bi.itemNotesSnapshot && <p className="text-[10px] text-gray-400 mb-2">{bi.itemNotesSnapshot}</p>}
+                  {bi.itemNotesSnapshot && <p className="text-[10px] mb-2" style={{ color: MUTED }}>{bi.itemNotesSnapshot}</p>}
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                     <div>
-                      <label className="text-[9px] uppercase tracking-wider text-gray-400 block mb-1">Unit Price ({currSym})</label>
+                      <label className="text-[9px] uppercase tracking-wider block mb-1" style={{ color: MUTED }}>Unit Price ({currSym})</label>
                       <input
                         type="number" min="0" step="0.01" disabled={isLocked}
                         value={p.unitPrice}
                         onChange={e => setPrices(prev => ({ ...prev, [bi.id]: { ...p, unitPrice: e.target.value } }))}
-                        className="w-full px-2.5 py-1.5 text-xs border rounded-lg bg-white disabled:bg-gray-100"
-                        style={{ borderColor: 'rgba(201,162,74,0.2)' }}
+                        className="w-full px-2.5 py-1.5 text-xs border rounded-lg disabled:opacity-60"
+                        style={{ borderColor: 'var(--pt-border, #D4CFC6)', backgroundColor: 'var(--pt-surface, #FFFCF7)' }}
                       />
                     </div>
                     {batch.includeVatInfo && (
                       <div className="flex items-end pb-1.5">
-                        <label className="flex items-center gap-1.5 text-[10px] text-gray-500">
+                        <label className="flex items-center gap-1.5 text-[10px]" style={{ color: MUTED }}>
                           <input
                             type="checkbox" disabled={isLocked} checked={p.includesVat}
                             onChange={e => setPrices(prev => ({ ...prev, [bi.id]: { ...p, includesVat: e.target.checked } }))}
@@ -276,23 +290,23 @@ const SupplierInvitationDetail: React.FC<SupplierInvitationDetailProps> = ({ bat
                       </div>
                     )}
                     <div>
-                      <label className="text-[9px] uppercase tracking-wider text-gray-400 block mb-1">Lead Time (days)</label>
+                      <label className="text-[9px] uppercase tracking-wider block mb-1" style={{ color: MUTED }}>Lead Time (days)</label>
                       <input
                         type="number" min="0" disabled={isLocked}
                         value={p.leadTimeDays}
                         onChange={e => setPrices(prev => ({ ...prev, [bi.id]: { ...p, leadTimeDays: e.target.value } }))}
-                        className="w-full px-2.5 py-1.5 text-xs border rounded-lg bg-white disabled:bg-gray-100"
-                        style={{ borderColor: 'rgba(201,162,74,0.2)' }}
+                        className="w-full px-2.5 py-1.5 text-xs border rounded-lg disabled:opacity-60"
+                        style={{ borderColor: 'var(--pt-border, #D4CFC6)', backgroundColor: 'var(--pt-surface, #FFFCF7)' }}
                       />
                     </div>
                     <div>
-                      <label className="text-[9px] uppercase tracking-wider text-gray-400 block mb-1">Availability Notes</label>
+                      <label className="text-[9px] uppercase tracking-wider block mb-1" style={{ color: MUTED }}>Availability Notes</label>
                       <input
                         type="text" disabled={isLocked}
                         value={p.availabilityNotes}
                         onChange={e => setPrices(prev => ({ ...prev, [bi.id]: { ...p, availabilityNotes: e.target.value } }))}
-                        className="w-full px-2.5 py-1.5 text-xs border rounded-lg bg-white disabled:bg-gray-100"
-                        style={{ borderColor: 'rgba(201,162,74,0.2)' }}
+                        className="w-full px-2.5 py-1.5 text-xs border rounded-lg disabled:opacity-60"
+                        style={{ borderColor: 'var(--pt-border, #D4CFC6)', backgroundColor: 'var(--pt-surface, #FFFCF7)' }}
                       />
                     </div>
                   </div>
@@ -302,35 +316,35 @@ const SupplierInvitationDetail: React.FC<SupplierInvitationDetailProps> = ({ bat
           </div>
 
           <div className="mt-4">
-            <label className="text-[9px] uppercase tracking-wider text-gray-400 block mb-1">Notes for the coordinator (optional)</label>
+            <label className="text-[9px] uppercase tracking-wider block mb-1" style={{ color: MUTED }}>Notes for the coordinator (optional)</label>
             <textarea
               disabled={isLocked} value={notes} onChange={e => setNotes(e.target.value)} rows={2}
-              className="w-full px-3 py-2 text-xs border rounded-lg bg-white resize-none disabled:bg-gray-100"
-              style={{ borderColor: 'rgba(201,162,74,0.2)' }}
+              className="w-full px-3 py-2 text-xs border rounded-lg resize-none disabled:opacity-60"
+              style={{ borderColor: 'var(--pt-border, #D4CFC6)', backgroundColor: 'var(--pt-surface, #FFFCF7)' }}
             />
           </div>
 
-          <div className="flex items-center justify-between mt-5 pt-4 border-t" style={{ borderColor: 'rgba(201,162,74,0.1)' }}>
+          <div className="flex items-center justify-between mt-5 pt-4 border-t" style={{ borderColor: 'var(--pt-border, #D4CFC6)' }}>
             <div className="text-xs">
-              <span className="text-gray-400">Total: </span>
-              <span className="font-semibold" style={{ color: '#1A1A1A' }}>
+              <span style={{ color: MUTED }}>Total: </span>
+              <span className="font-semibold" style={{ color: TEXT }}>
                 {currSym} {totals.gross.toLocaleString('en-ZA', { maximumFractionDigits: 0 })}
               </span>
-              {batch.includeVatInfo && <span className="text-gray-400"> (incl. VAT)</span>}
+              {batch.includeVatInfo && <span style={{ color: MUTED }}> (incl. VAT)</span>}
             </div>
             {!isLocked && (
               <div className="flex gap-2">
                 <button
                   type="button" disabled={saving} onClick={() => handleSave('DRAFT_SAVE')}
                   className="px-3.5 py-2 rounded-lg text-xs font-medium border disabled:opacity-50"
-                  style={{ borderColor: 'rgba(201,162,74,0.3)', color: GOLD }}
+                  style={{ borderColor: 'color-mix(in srgb, var(--pt-primary, #C9A24A) 35%, transparent)', color: GOLD }}
                 >
                   Save Draft
                 </button>
                 <button
                   type="button" disabled={saving} onClick={() => handleSave('SUBMITTED')}
-                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-medium text-white disabled:opacity-50"
-                  style={{ backgroundColor: GOLD }}
+                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-medium disabled:opacity-50"
+                  style={{ backgroundColor: GOLD, color: 'var(--pt-on-primary, #FFF)' }}
                 >
                   {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
                   {batch.currentSubmittedVersion > 0 ? 'Submit Revised Quote' : 'Submit Quote'}

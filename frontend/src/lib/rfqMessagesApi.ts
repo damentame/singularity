@@ -126,18 +126,18 @@ export async function markMessagesReadByCoordinator(batchId: string): Promise<vo
     .from('rfq_messages')
     .update({ read_by_coordinator: true })
     .eq('rfq_batch_id', batchId)
-    .eq('sender_type', 'supplier')
+    .in('sender_type', ['supplier', 'system'])
     .eq('read_by_coordinator', false);
 
   if (error) console.warn('markMessagesReadByCoordinator failed:', error);
 }
 
-/** Unread (supplier-authored, unread-by-coordinator) message counts, keyed by batch id, for every batch belonging to userId. */
+/** Unread (supplier/system-authored, unread-by-coordinator) message counts, keyed by batch id, for every batch belonging to userId. */
 export async function getUnreadCountsByBatch(userId: string): Promise<Record<string, number>> {
   const { data, error } = await supabase
     .from('rfq_messages')
     .select('rfq_batch_id, rfq_batches!inner(user_id)')
-    .eq('sender_type', 'supplier')
+    .in('sender_type', ['supplier', 'system'])
     .eq('read_by_coordinator', false)
     .eq('rfq_batches.user_id', userId);
 
@@ -185,7 +185,7 @@ export async function getRecentMessagesForEvent(eventId: string): Promise<Recent
       batchId: row.rfq_batch_id,
       supplierName: supplierNameByBatch[row.rfq_batch_id] || 'Supplier',
       message: rowToMessage(row),
-      unread: row.sender_type === 'supplier' && !row.read_by_coordinator,
+      unread: (row.sender_type === 'supplier' || row.sender_type === 'system') && !row.read_by_coordinator,
     });
   }
 

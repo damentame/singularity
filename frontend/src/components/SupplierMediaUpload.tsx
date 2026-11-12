@@ -6,7 +6,7 @@ import {
 import { supabase } from '@/lib/supabase';
 import { useAppContext } from '@/contexts/AppContext';
 import { mediaTypes, mediaCategories } from '@/data/venueTypes';
-import { appendPortfolioUrls, removePortfolioUrl, setCoverImage as saveCoverImage } from '@/lib/portfolioUpload';
+import { appendPortfolioUrls, removePortfolioUrl, setCoverImage as saveCoverImage, uploadPortfolioImage } from '@/lib/portfolioUpload';
 
 interface UploadedMedia {
   id: string;
@@ -89,23 +89,10 @@ const SupplierMediaUpload: React.FC<SupplierMediaUploadProps> = ({ supplierId, o
       setUploadProgress(Math.round((i / files.length) * 100));
       
       try {
-        // Upload to Supabase Storage
-        const fileExt = file.name.split('.').pop();
-        const fileName = `${supplierId}/${selectedCategory}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
-        
-        const { data: uploadData, error: uploadError } = await supabase.storage
-          .from('supplier-media')
-          .upload(fileName, file, {
-            cacheControl: '3600',
-            upsert: false,
-          });
-
-        if (uploadError) throw uploadError;
-
-        // Get public URL
-        const { data: { publicUrl } } = supabase.storage
-          .from('supplier-media')
-          .getPublicUrl(fileName);
+        // Must use portfolios/{auth.uid()}/... to satisfy storage RLS.
+        const uploaded = await uploadPortfolioImage(file, user.id);
+        if (!uploaded.url) throw new Error(uploaded.error || 'Upload failed');
+        const publicUrl = uploaded.url;
 
         await appendPortfolioUrls(user.id, [publicUrl]);
 

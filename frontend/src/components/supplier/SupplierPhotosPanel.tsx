@@ -10,8 +10,7 @@ import {
   AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle,
   AlertDialogDescription, AlertDialogFooter, AlertDialogAction, AlertDialogCancel,
 } from '@/components/ui/alert-dialog';
-
-const GOLD = '#C9A24A';
+import { ALLOWED_IMAGE_ACCEPT, GOLD, MUTED, glassCard } from './supplierUi';
 
 const SupplierPhotosPanel: React.FC = () => {
   const { user } = useAppContext();
@@ -41,17 +40,26 @@ const SupplierPhotosPanel: React.FC = () => {
         setProgressText(`Uploading ${p.current} of ${p.total}...`);
       });
       const successfulUrls = results.filter(r => r.url && !r.error).map(r => r.url);
-      const failedCount = results.filter(r => r.error).length;
+      const failed = results.filter(r => r.error);
 
       if (successfulUrls.length > 0) {
-        const { success, allUrls } = await appendPortfolioUrls(user.id, successfulUrls);
+        const { success, allUrls, error } = await appendPortfolioUrls(user.id, successfulUrls);
         if (success) {
           setUrls(allUrls);
           toast({ title: 'Photos uploaded', description: `${successfulUrls.length} photo${successfulUrls.length > 1 ? 's' : ''} added.` });
+        } else {
+          toast({ title: 'Could not save photos', description: error || 'Upload succeeded but the profile update failed.', variant: 'destructive' });
         }
       }
-      if (failedCount > 0) {
-        toast({ title: 'Some uploads failed', description: `${failedCount} photo${failedCount > 1 ? 's' : ''} could not be uploaded.`, variant: 'destructive' });
+      if (failed.length > 0) {
+        const firstError = failed[0].error || 'Upload failed';
+        toast({
+          title: failed.length === results.length ? 'Upload failed' : 'Some uploads failed',
+          description: failed.length === 1
+            ? firstError
+            : `${failed.length} photo${failed.length > 1 ? 's' : ''} could not be uploaded. ${firstError}`,
+          variant: 'destructive',
+        });
       }
     } finally {
       setUploading(false);
@@ -85,7 +93,7 @@ const SupplierPhotosPanel: React.FC = () => {
   }
 
   return (
-    <div className="bg-white rounded-2xl border p-6" style={{ borderColor: 'rgba(201,162,74,0.15)' }}>
+    <div className="rounded-2xl p-6" style={glassCard}>
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-[10px] font-semibold uppercase tracking-[0.15em]" style={{ color: GOLD }}>
           <ImageIcon className="w-3.5 h-3.5 inline mr-1.5" /> Photos
@@ -94,20 +102,29 @@ const SupplierPhotosPanel: React.FC = () => {
           onClick={() => fileInputRef.current?.click()}
           disabled={uploading}
           className="flex items-center gap-1 text-[10px] font-medium px-3 py-1.5 rounded-lg border transition-all hover:shadow-sm disabled:opacity-50"
-          style={{ borderColor: 'rgba(201,162,74,0.3)', color: GOLD }}
+          style={{ borderColor: 'color-mix(in srgb, var(--pt-primary, #C9A24A) 35%, transparent)', color: GOLD }}
         >
           {uploading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
           {uploading ? (progressText || 'Uploading...') : 'Upload Photos'}
         </button>
-        <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={e => handleFiles(e.target.files)} />
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept={ALLOWED_IMAGE_ACCEPT}
+          multiple
+          className="hidden"
+          onChange={e => handleFiles(e.target.files)}
+        />
       </div>
 
       {urls.length === 0 ? (
-        <p className="text-xs text-gray-400 text-center py-8">No photos yet. Add a few examples of your work - coordinators see your cover photo first.</p>
+        <p className="text-xs text-center py-8" style={{ color: MUTED }}>
+          No photos yet. Add JPEG, PNG, WebP, or GIF examples of your work — coordinators see your cover photo first.
+        </p>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           {urls.map(url => (
-            <div key={url} className="relative group rounded-xl overflow-hidden border" style={{ borderColor: 'rgba(0,0,0,0.06)' }}>
+            <div key={url} className="relative group rounded-xl overflow-hidden" style={{ border: '1px solid var(--pt-border, #D4CFC6)' }}>
               <img src={url} alt="Portfolio" className="w-full h-28 object-cover" />
               {coverUrl === url && (
                 <span className="absolute top-1.5 left-1.5 flex items-center gap-1 text-[8px] font-semibold px-1.5 py-0.5 rounded-full text-white" style={{ backgroundColor: GOLD }}>
