@@ -151,10 +151,21 @@ const SupplierQuoteReview: React.FC<SupplierQuoteReviewProps> = ({ event, onClos
       );
       updateBatchStatus(batch.id, 'SENT');
 
-      // Sync to Supabase so supplier can open portal on any device
-      if (user?.id) {
-        syncRFQBatch(user.id, batch, getItemsForBatch(batch.id), event);
+      // Sync to Supabase so supplier can open portal on any device. This has to succeed before
+      // the email goes out - the email's portal link and the authenticated supplier's dashboard
+      // both read from this row, so sending the email after a failed sync would hand the
+      // supplier a link to data that was never written.
+      const synced = user?.id ? await syncRFQBatch(user.id, batch, getItemsForBatch(batch.id), event) : false;
+      if (user?.id && synced) {
         syncBatchStatus(batch.id, 'SENT', user.id);
+      }
+      if (!synced) {
+        toast({
+          title: 'Could not send request',
+          description: 'The request was saved locally but failed to sync - please try again in a moment.',
+          variant: 'destructive',
+        });
+        return;
       }
 
       // Send bundled email via edge function

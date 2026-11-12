@@ -33,6 +33,7 @@ const RFQSourcingPanel: React.FC<RFQSourcingPanelProps> = ({ event, autoOpenBatc
   const [showCreate, setShowCreate] = useState(false);
   const [supplierName, setSupplierName] = useState('');
   const [supplierEmail, setSupplierEmail] = useState('');
+  const [creating, setCreating] = useState(false);
   const [message, setMessage] = useState('');
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [expandedBatch, setExpandedBatch] = useState<string | null>(null);
@@ -76,8 +77,8 @@ const RFQSourcingPanel: React.FC<RFQSourcingPanelProps> = ({ event, autoOpenBatc
     setSelectedItems(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
   };
 
-  const handleCreate = () => {
-    if (!supplierName.trim() || selectedItems.length === 0) return;
+  const handleCreate = async () => {
+    if (!supplierName.trim() || selectedItems.length === 0 || creating) return;
 
     // Warn, don't block - a revised item list or a second genuine request to the same
     // supplier for this event are both legitimate, so this is a heads-up, not a gate.
@@ -86,18 +87,32 @@ const RFQSourcingPanel: React.FC<RFQSourcingPanelProps> = ({ event, autoOpenBatc
       b => b.status !== 'CANCELLED' && b.supplierEmail.trim().toLowerCase() === emailKey
     );
 
+    setCreating(true);
     const batch = createRFQBatch(event, supplierName.trim(), supplierEmail.trim(), selectedItems, message.trim());
+
+    // Sync to Supabase so the supplier can see it - in their authenticated dashboard if their
+    // account email matches, and via the portal link either way. This has to be confirmed
+    // before telling the coordinator the invite went out: a local-only batch looks identical
+    // to a synced one in this form, but is invisible to the supplier no matter what email was
+    // entered, which is exactly the "invite isn't going through" failure mode this guards against.
+    const synced = user?.id ? await syncRFQBatch(user.id, batch, getItemsForBatch(batch.id), event) : false;
+    setCreating(false);
+
+    if (!synced) {
+      toast({
+        title: 'Could not send invitation',
+        description: 'The request was saved locally but failed to reach the supplier - please try again in a moment.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setSupplierName(''); setSupplierEmail(''); setMessage(''); setSelectedItems([]);
     setShowCreate(false);
     setRefreshKey(k => k + 1);
 
     if (isDuplicateInvite) {
       toast({ title: 'Heads up', description: `${batch.supplierName} already has an active request for this event.` });
-    }
-
-    // Sync to Supabase so supplier can open the portal on any device
-    if (user?.id) {
-      syncRFQBatch(user.id, batch, getItemsForBatch(batch.id), event);
     }
 
     // Log activity
@@ -188,6 +203,7 @@ const RFQSourcingPanel: React.FC<RFQSourcingPanelProps> = ({ event, autoOpenBatc
             <div>
               <label className="text-[10px] uppercase tracking-wider text-gray-400 block mb-1">Supplier Email</label>
               <input value={supplierEmail} onChange={e => setSupplierEmail(e.target.value)} placeholder="supplier@example.com" className="w-full px-3 py-2 text-xs border rounded-lg bg-white" style={{ borderColor: 'rgba(201,162,74,0.2)', color: '#1A1A1A' }} />
+              <p className="text-[9px] text-gray-400 mt-1">Must match the email the supplier logs in with for it to appear in their account - the portal link below works regardless.</p>
             </div>
           </div>
           <div>
@@ -221,8 +237,8 @@ const RFQSourcingPanel: React.FC<RFQSourcingPanelProps> = ({ event, autoOpenBatc
           </div>
 
           <div className="flex gap-2">
-            <button onClick={handleCreate} disabled={!supplierName.trim() || selectedItems.length === 0} className="flex-1 py-2 text-xs font-medium text-white rounded-lg disabled:opacity-40" style={{ backgroundColor: GOLD }}>
-              Create Batch ({selectedItems.length} items)
+            <button onClick={handleCreate} disabled={!supplierName.trim() || selectedItems.length === 0 || creating} className="flex-1 py-2 text-xs font-medium text-white rounded-lg disabled:opacity-40" style={{ backgroundColor: GOLD }}>
+              {creating ? 'Sending...' : `Create Batch (${selectedItems.length} items)`}
             </button>
             <button onClick={() => setShowCreate(false)} className="px-4 py-2 text-xs text-gray-400">Cancel</button>
           </div>

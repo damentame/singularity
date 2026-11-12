@@ -113,8 +113,8 @@ const SearchProviders: React.FC = () => {
       const { data, error: fetchError } = await supabase
         .from('service_providers')
         .select('*')
-        .eq('status', 'approved')
-        .order('is_featured', { ascending: false })
+        .eq('is_active', true)
+        .eq('id_verification_status', 'approved')
         .order('created_at', { ascending: false });
 
       if (fetchError) {

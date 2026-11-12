@@ -30,14 +30,18 @@ export function buildEventContext(event: PlannerEvent): Record<string, any> {
   };
 }
 
-// Upsert the batch and its items to Supabase.
-// Fire-and-forget: errors are logged but don't break the coordinator's flow.
+// Upsert the batch and its items to Supabase. The batch always exists locally regardless of
+// outcome (rfqStore already wrote it) - this is specifically about whether the supplier's own
+// account will be able to see it, which depends entirely on this write succeeding. Callers
+// should surface a failure here rather than reporting the invite as sent, since a local-only
+// batch with no backend row is invisible to an authenticated supplier no matter how correct
+// the email on it is.
 export async function syncRFQBatch(
   userId: string,
   batch: RFQBatch,
   batchItems: RFQBatchItem[],
   event: PlannerEvent,
-): Promise<void> {
+): Promise<boolean> {
   try {
     const { error: batchError } = await supabase.from('rfq_batches').upsert({
       id:                             batch.id,
@@ -60,10 +64,10 @@ export async function syncRFQBatch(
 
     if (batchError) {
       console.warn('syncRFQBatch: batch upsert failed', batchError.message);
-      return;
+      return false;
     }
 
-    if (batchItems.length === 0) return;
+    if (batchItems.length === 0) return true;
 
     const rows = batchItems.map(bi => ({
       id:                           bi.id,
@@ -86,9 +90,12 @@ export async function syncRFQBatch(
 
     if (itemsError) {
       console.warn('syncRFQBatch: items upsert failed', itemsError.message);
+      return false;
     }
+    return true;
   } catch (err: any) {
     console.warn('syncRFQBatch error:', err.message);
+    return false;
   }
 }
 
