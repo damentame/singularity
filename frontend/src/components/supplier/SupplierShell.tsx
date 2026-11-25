@@ -1,17 +1,18 @@
 import React, { useEffect, useState } from 'react';
-import { Inbox, Store, Loader2 } from 'lucide-react';
+import { Inbox, Store, Loader2, FileText } from 'lucide-react';
 import { useAppContext } from '@/contexts/AppContext';
 import { supabase } from '@/lib/supabase';
 import { getMyInvitations } from '@/lib/supplierRfqApi';
 import { getUnreadCountsForSupplier } from '@/lib/rfqMessagesApi';
 import SupplierInvitationsList from './SupplierInvitationsList';
 import SupplierInvitationDetail from './SupplierInvitationDetail';
+import SupplierQuotesPanel from './SupplierQuotesPanel';
 import SupplierCatalogPanel from './SupplierCatalogPanel';
 
 const GOLD = '#C9A24A';
 const BADGE_POLL_MS = 30000;
 
-type Tab = 'invitations' | 'catalog';
+type Tab = 'invitations' | 'quotes' | 'catalog';
 
 const SupplierShell: React.FC = () => {
   const { user, setCurrentView } = useAppContext();
@@ -93,6 +94,7 @@ const SupplierShell: React.FC = () => {
         <div className="flex items-center gap-2 mb-6 border-b" style={{ borderColor: 'rgba(201,162,74,0.12)' }}>
           {([
             { key: 'invitations' as Tab, label: 'My Invitations', icon: Inbox },
+            { key: 'quotes' as Tab, label: 'My Quotes', icon: FileText },
             { key: 'catalog' as Tab, label: 'Profile & Catalog', icon: Store },
           ]).map(t => (
             <button
@@ -121,6 +123,9 @@ const SupplierShell: React.FC = () => {
           selectedBatchId
             ? <SupplierInvitationDetail batchId={selectedBatchId} onBack={() => setSelectedBatchId(null)} />
             : <SupplierInvitationsList onOpen={setSelectedBatchId} />
+        )}
+        {tab === 'quotes' && (
+          <SupplierQuotesPanel onOpen={(batchId) => { setTab('invitations'); setSelectedBatchId(batchId); }} />
         )}
         {tab === 'catalog' && <SupplierCatalogPanel />}
       </div>

@@ -3,7 +3,7 @@ import { Package, ChevronRight, Loader2, Inbox, MessageCircle, Clock } from 'luc
 import { getMyInvitations, SupplierInvitation } from '@/lib/supplierRfqApi';
 import { getUnreadCountsForSupplier } from '@/lib/rfqMessagesApi';
 import { RFQ_BATCH_STATUS_LABELS, RFQ_BATCH_STATUS_COLORS } from '@/contexts/EventContext';
-import { getCurrencySymbol } from '@/data/countryConfig';
+import { getCurrencySymbol, COUNTRY_FINANCE_CONFIGS } from '@/data/countryConfig';
 
 const GOLD = '#C9A24A';
 const URGENT_DAYS_THRESHOLD = 5;
@@ -14,6 +14,9 @@ interface SupplierInvitationsListProps {
 
 const formatDate = (date: string) =>
   date ? new Date(date + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Date TBC';
+
+// event_context stores the country as an ISO code (e.g. "ZA"), not a display name.
+const countryName = (iso: string) => COUNTRY_FINANCE_CONFIGS.find(c => c.countryIso === iso)?.countryName || iso;
 
 /** Whole days from today until dateStr (negative if already past); null if no date is set. */
 function daysUntil(dateStr: string): number | null {
@@ -128,7 +131,7 @@ const SupplierInvitationsList: React.FC<SupplierInvitationsListProps> = ({ onOpe
                 )}
               </div>
               <p className="text-xs text-gray-400 mt-1">
-                {formatDate(ctx.date)} · {[ctx.city, ctx.country].filter(Boolean).join(', ') || 'Location TBC'} · {itemCount} item{itemCount !== 1 ? 's' : ''}
+                {formatDate(ctx.date)} · {[ctx.city, ctx.country && countryName(ctx.country)].filter(Boolean).join(', ') || 'Location TBC'} · {itemCount} item{itemCount !== 1 ? 's' : ''}
               </p>
               {batch.currentSubmittedVersion > 0 && (
                 <p className="text-[10px] mt-1" style={{ color: GOLD }}>

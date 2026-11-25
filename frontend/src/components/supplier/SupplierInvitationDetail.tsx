@@ -4,7 +4,7 @@ import { getPortalDataForBatch, saveQuoteForBatch, PortalData } from '@/lib/rfqP
 import { respondToInvitation } from '@/lib/supplierRfqApi';
 import { sendSystemMessage } from '@/lib/rfqMessagesApi';
 import { RFQ_BATCH_STATUS_LABELS, RFQ_BATCH_STATUS_COLORS, SupplierQuoteVersionItem } from '@/contexts/EventContext';
-import { getCurrencySymbol, formatCurrency } from '@/data/countryConfig';
+import { getCurrencySymbol, formatCurrency, COUNTRY_FINANCE_CONFIGS } from '@/data/countryConfig';
 import { useAppContext } from '@/contexts/AppContext';
 import { toast } from '@/components/ui/use-toast';
 import RFQMessageThread from '@/components/RFQMessageThread';
@@ -33,6 +33,9 @@ const emptyDraft = (defaultIncVat: boolean): ItemDraft => ({
 
 const formatDate = (date: string) =>
   date ? new Date(date + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }) : 'Date TBC';
+
+// event_context stores the country as an ISO code (e.g. "ZA"), not a display name.
+const countryName = (iso: string) => COUNTRY_FINANCE_CONFIGS.find(c => c.countryIso === iso)?.countryName || iso;
 
 const SupplierInvitationDetail: React.FC<SupplierInvitationDetailProps> = ({ batchId, onBack }) => {
   const { user } = useAppContext();
@@ -194,7 +197,7 @@ const SupplierInvitationDetail: React.FC<SupplierInvitationDetailProps> = ({ bat
               {ctx.quoteNumber || 'Quote Request'}
             </h2>
             <p className="text-xs text-gray-400 mt-1">
-              {formatDate(ctx.date)} · {[ctx.city, ctx.country].filter(Boolean).join(', ') || 'Location TBC'}
+              {formatDate(ctx.date)} · {[ctx.city, ctx.country && countryName(ctx.country)].filter(Boolean).join(', ') || 'Location TBC'}
             </p>
           </div>
           <span className="text-[10px] font-medium px-2.5 py-1 rounded-full text-white" style={{ backgroundColor: RFQ_BATCH_STATUS_COLORS[batch.status] }}>
@@ -226,6 +229,58 @@ const SupplierInvitationDetail: React.FC<SupplierInvitationDetailProps> = ({ bat
           </span>
         </button>
       </div>
+
+      {/* What's actually being requested - shown regardless of response status, so the supplier
+          can see what they'd be quoting on before deciding, not just an Accept/Decline prompt
+          with no context behind it. The post-accept pricing form below repeats item names/qty
+          next to their price fields, so this is skipped once accepted to avoid showing it twice. */}
+      {batchItems.length > 0 && batch.invitationResponse !== 'accepted' && (
+        <div className="bg-white rounded-2xl border p-6" style={{ borderColor: 'rgba(201,162,74,0.15)' }}>
+          <h3 className="text-[10px] font-semibold uppercase tracking-[0.15em] mb-4" style={{ color: GOLD }}>
+            <Package className="w-3.5 h-3.5 inline mr-1.5" /> Items Requested ({batchItems.length})
+          </h3>
+          <div className="space-y-2">
+            {batchItems.map(bi => {
+              const moment = batch.includeMomentSpaceContext ? (ctx.moments || []).find((m: any) => m.id === bi.momentIdSnapshot) : null;
+              const space = batch.includeMomentSpaceContext ? (ctx.venueSpaces || []).find((s: any) => s.id === bi.spaceIdSnapshot) : null;
+              const locationLabel = [moment?.name, space?.name].filter(Boolean).join(' · ');
+              return (
+                <div key={bi.id} className="p-3 rounded-xl" style={{ backgroundColor: '#FAFAF7' }}>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-medium" style={{ color: '#1A1A1A' }}>{bi.itemNameSnapshot}</span>
+                    <span className="text-[10px] text-gray-400 flex-shrink-0">Qty: {bi.qtySnapshot}</span>
+                  </div>
+                  <div className="flex items-center gap-2 mt-1 flex-wrap">
+                    {bi.categorySnapshot && <span className="text-[9px] text-gray-400">{bi.categorySnapshot}</span>}
+                    {locationLabel && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500">{locationLabel}</span>}
+                  </div>
+                  {bi.itemNotesSnapshot && <p className="text-[10px] text-gray-400 mt-1.5">{bi.itemNotesSnapshot}</p>}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {batchItems.length === 0 && (ctx.eventType || ctx.guestCount || ctx.budgetRange || (ctx.servicesRequested || []).length > 0) && (
+        <div className="bg-white rounded-2xl border p-6" style={{ borderColor: 'rgba(201,162,74,0.15)' }}>
+          <h3 className="text-[10px] font-semibold uppercase tracking-[0.15em] mb-3" style={{ color: GOLD }}>Enquiry Details</h3>
+          <div className="grid grid-cols-2 gap-3 text-xs">
+            {ctx.eventType && (
+              <div><span className="text-gray-400">Event type: </span><span style={{ color: '#1A1A1A' }}>{ctx.eventType}</span></div>
+            )}
+            {!!ctx.guestCount && (
+              <div><span className="text-gray-400">Guests: </span><span style={{ color: '#1A1A1A' }}>{ctx.guestCount}</span></div>
+            )}
+            {ctx.budgetRange && (
+              <div><span className="text-gray-400">Budget: </span><span style={{ color: '#1A1A1A' }}>{ctx.budgetRange}</span></div>
+            )}
+            {(ctx.servicesRequested || []).length > 0 && (
+              <div className="col-span-2"><span className="text-gray-400">Services requested: </span><span style={{ color: '#1A1A1A' }}>{(ctx.servicesRequested || []).join(', ')}</span></div>
+            )}
+          </div>
+        </div>
+      )}
 
       {!batch.invitationResponse && batch.status !== 'CANCELLED' && (
         <div className="bg-white rounded-2xl border p-6" style={{ borderColor: 'rgba(201,162,74,0.15)' }}>
@@ -278,10 +333,7 @@ const SupplierInvitationDetail: React.FC<SupplierInvitationDetailProps> = ({ bat
 
       {batch.invitationResponse === 'accepted' && batchItems.length === 0 && (
         <div className="bg-white rounded-2xl border p-6 text-center" style={{ borderColor: 'rgba(201,162,74,0.15)' }}>
-          <p className="text-xs text-gray-500">
-            This is a general enquiry with no fixed items listed yet.
-          </p>
-          <p className="text-xs text-gray-400 mt-1">
+          <p className="text-xs text-gray-400">
             Reply via the message thread above to discuss pricing, scope and availability.
           </p>
           {!isLocked && (
@@ -304,12 +356,21 @@ const SupplierInvitationDetail: React.FC<SupplierInvitationDetailProps> = ({ bat
           <div className="space-y-3">
             {batchItems.map(bi => {
               const p = prices[bi.id] || emptyDraft(true);
+              const moment = batch.includeMomentSpaceContext ? (ctx.moments || []).find((m: any) => m.id === bi.momentIdSnapshot) : null;
+              const space = batch.includeMomentSpaceContext ? (ctx.venueSpaces || []).find((s: any) => s.id === bi.spaceIdSnapshot) : null;
+              const locationLabel = [moment?.name, space?.name].filter(Boolean).join(' · ');
               return (
                 <div key={bi.id} className="p-4 rounded-xl border" style={{ borderColor: 'rgba(0,0,0,0.06)', backgroundColor: '#FAFAF7' }}>
                   <div className="flex items-center justify-between mb-2.5">
                     <span className="text-xs font-medium" style={{ color: '#1A1A1A' }}>{bi.itemNameSnapshot}</span>
                     <span className="text-[10px] text-gray-400">Qty: {bi.qtySnapshot}</span>
                   </div>
+                  {(bi.categorySnapshot || locationLabel) && (
+                    <div className="flex items-center gap-2 mb-2 flex-wrap">
+                      {bi.categorySnapshot && <span className="text-[9px] text-gray-400">{bi.categorySnapshot}</span>}
+                      {locationLabel && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500">{locationLabel}</span>}
+                    </div>
+                  )}
                   {bi.itemNotesSnapshot && <p className="text-[10px] text-gray-400 mb-2">{bi.itemNotesSnapshot}</p>}
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                     <div>
