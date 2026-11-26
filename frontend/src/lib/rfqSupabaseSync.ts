@@ -3,8 +3,12 @@
 // so the supplier can access the data cross-device via their portal link.
 
 import { supabase } from '@/lib/supabase';
-import { RFQBatch, RFQBatchItem, RFQBatchStatus, PlannerEvent, SupplierQuoteVersion } from '@/contexts/EventContext';
-import { upsertQuoteVersionFromSupabase } from '@/data/rfqStore';
+import { RFQBatch, RFQBatchItem, RFQBatchStatus, PlannerEvent, SupplierQuoteVersion, EVENT_TYPE_LABELS } from '@/contexts/EventContext';
+import {
+  applyInvitationResponseFromSupabase,
+  upsertBatchFromSupabase,
+  upsertQuoteVersionFromSupabase,
+} from '@/data/rfqStore';
 
 // Build the minimal event context that the supplier portal needs.
 // Deliberately excludes event.name / companyName / clientDetails - suppliers
@@ -18,6 +22,9 @@ export function buildEventContext(event: PlannerEvent): Record<string, any> {
       id: m.id,
       name: m.name,
       venueSpaceId: m.venueSpaceId || '',
+      date: m.date || '',
+      startTime: m.startTime || '',
+      endTime: m.endTime || '',
     })),
     venueSpaces: (event.venueSpaces || []).map(s => ({
       id: s.id,
@@ -25,9 +32,54 @@ export function buildEventContext(event: PlannerEvent): Record<string, any> {
     })),
     city: event.city || event.location || '',
     country: event.country || '',
+    region: event.region || '',
     date: event.date || '',
+    endDate: event.endDate || '',
+    setupDays: event.setupDays || 0,
+    strikeDays: event.strikeDays || 0,
+    eventType: EVENT_TYPE_LABELS[event.eventType] || '',
+    venue: event.venue || '',
+    guestCount: event.guestCount || 0,
     quoteNumber: event.quoteNumber || '',
   };
+}
+
+// The event_context snapshot is otherwise only written when a batch is first created, so
+// any later edit to the event (date, venue, guest count...) never reached the supplier.
+// Called after the coordinator's event autosave to re-push the snapshot onto every open
+// batch for that event. Merges over the stored snapshot rather than replacing it, so keys
+// written by other flows (e.g. a general enquiry's budgetRange) survive.
+export async function refreshEventContextForEvent(userId: string, event: PlannerEvent): Promise<boolean> {
+  try {
+    const { data, error } = await supabase
+      .from('rfq_batches')
+      .select('id, event_context')
+      .eq('event_id', event.id)
+      .eq('user_id', userId)
+      .neq('status', 'CANCELLED');
+    if (error) {
+      console.warn('refreshEventContextForEvent: batch lookup failed', error.message);
+      return false;
+    }
+    if (!data || data.length === 0) return true;
+
+    const fresh = buildEventContext(event);
+    const results = await Promise.all(data.map(row =>
+      supabase
+        .from('rfq_batches')
+        .update({ event_context: { ...(row.event_context || {}), ...fresh } })
+        .eq('id', row.id),
+    ));
+    const failed = results.find(r => r.error);
+    if (failed?.error) {
+      console.warn('refreshEventContextForEvent: update failed', failed.error.message);
+      return false;
+    }
+    return true;
+  } catch (err: any) {
+    console.warn('refreshEventContextForEvent error:', err.message);
+    return false;
+  }
 }
 
 // Upsert the batch and its items to Supabase. The batch always exists locally regardless of
@@ -64,7 +116,7 @@ export async function syncRFQBatch(
 
     if (batchError) {
       console.warn('syncRFQBatch: batch upsert failed', batchError.message);
-      return false;
+      throw new Error(batchError.message);
     }
 
     if (batchItems.length === 0) return true;
@@ -90,12 +142,12 @@ export async function syncRFQBatch(
 
     if (itemsError) {
       console.warn('syncRFQBatch: items upsert failed', itemsError.message);
-      return false;
+      throw new Error(itemsError.message);
     }
     return true;
   } catch (err: any) {
     console.warn('syncRFQBatch error:', err.message);
-    return false;
+    throw err;
   }
 }
 
@@ -119,6 +171,95 @@ export async function syncBatchStatus(
     if (error) console.warn('syncBatchStatus failed:', error.message);
   } catch (err: any) {
     console.warn('syncBatchStatus error:', err.message);
+  }
+}
+
+/** Hydrate local rfqStore with batches + items for an event from Supabase. */
+export async function pullBatchesFromSupabase(eventId: string): Promise<number> {
+  try {
+    const { data: batches, error } = await supabase
+      .from('rfq_batches')
+      .select('*')
+      .eq('event_id', eventId);
+
+    if (error || !batches || batches.length === 0) return 0;
+
+    const batchIds = batches.map((b: any) => b.id);
+    const { data: items } = await supabase
+      .from('rfq_batch_items')
+      .select('*')
+      .in('rfq_batch_id', batchIds);
+
+    const itemsByBatch: Record<string, RFQBatchItem[]> = {};
+    for (const row of items || []) {
+      const mapped: RFQBatchItem = {
+        id: row.id,
+        rfqBatchId: row.rfq_batch_id,
+        lineItemId: row.line_item_id,
+        itemNameSnapshot: row.item_name_snapshot ?? '',
+        qtySnapshot: row.qty_snapshot ?? 1,
+        unitTypeSnapshot: row.unit_type_snapshot ?? 'EACH',
+        momentIdSnapshot: row.moment_id_snapshot ?? '',
+        spaceIdSnapshot: row.space_id_snapshot ?? '',
+        installationLabelSnapshot: row.installation_label_snapshot ?? '',
+        itemNotesSnapshot: row.item_notes_snapshot ?? '',
+        categorySnapshot: row.category_snapshot ?? '',
+        createdAt: row.created_at ?? '',
+      };
+      (itemsByBatch[row.rfq_batch_id] ||= []).push(mapped);
+    }
+
+    let changed = 0;
+    for (const row of batches as any[]) {
+      const batch: RFQBatch = {
+        id: row.id,
+        eventId: row.event_id,
+        supplierId: (row.supplier_name as string).toLowerCase().replace(/\s+/g, '-'),
+        supplierName: row.supplier_name,
+        supplierEmail: row.supplier_email ?? '',
+        status: row.status,
+        portalToken: row.portal_token,
+        messageToSupplier: row.message_to_supplier ?? '',
+        includeVatInfo: row.include_vat_info ?? true,
+        includeMomentSpaceContext: row.include_moment_space_context ?? true,
+        currentSupplierDraftVersion: row.current_supplier_draft_version ?? 0,
+        currentSubmittedVersion: row.current_submitted_version ?? 0,
+        sentAt: row.sent_at ?? '',
+        acceptedAt: row.accepted_at ?? '',
+        lastSupplierSaveAt: row.last_supplier_save_at ?? '',
+        createdAt: row.created_at ?? '',
+        invitationResponse: row.invitation_response ?? '',
+        invitationRespondedAt: row.invitation_responded_at ?? '',
+      };
+      if (upsertBatchFromSupabase(batch, itemsByBatch[row.id] || [])) changed++;
+    }
+    return changed;
+  } catch (err: any) {
+    console.warn('pullBatchesFromSupabase error:', err.message);
+    return 0;
+  }
+}
+
+/** Pull invitation accept/decline flags from Supabase into the local rfqStore. */
+export async function pullInvitationResponses(eventId: string): Promise<number> {
+  try {
+    const { data: batches, error } = await supabase
+      .from('rfq_batches')
+      .select('id, invitation_response, invitation_responded_at')
+      .eq('event_id', eventId);
+
+    if (error || !batches) return 0;
+
+    let changed = 0;
+    for (const row of batches as any[]) {
+      const response = (row.invitation_response || '') as '' | 'accepted' | 'declined';
+      const respondedAt = row.invitation_responded_at || '';
+      if (applyInvitationResponseFromSupabase(row.id, response, respondedAt)) changed++;
+    }
+    return changed;
+  } catch (err: any) {
+    console.warn('pullInvitationResponses error:', err.message);
+    return 0;
   }
 }
 

@@ -15,13 +15,13 @@ import {
   EVENT_TYPE_LABELS,
   getEventDisplayName,
 } from '@/contexts/EventContext';
-import { createRFQBatch, updateBatchStatus, getPortalUrl, getItemsForBatch } from '@/data/rfqStore';
+import { getPortalUrl } from '@/data/rfqStore';
 import { getCurrencySymbol } from '@/data/countryConfig';
 import { getCountryByCode } from '@/data/countries';
 import { supabase } from '@/lib/supabase';
 import { toast } from '@/components/ui/use-toast';
 import { useAppContext } from '@/contexts/AppContext';
-import { syncRFQBatch, syncBatchStatus } from '@/lib/rfqSupabaseSync';
+import { createAndSyncSupplierInvitation } from '@/lib/createSupplierInvitation';
 
 const GOLD = '#C9A24A';
 
@@ -140,35 +140,31 @@ const SupplierQuoteReview: React.FC<SupplierQuoteReviewProps> = ({ event, onClos
         };
       });
 
-      // Create RFQ batch in local store
       const lineItemIds = bundle.lineItems.map(li => li.id);
-      const batch = createRFQBatch(
+      if (!user?.id) {
+        toast({ title: 'Sign in required', description: 'Sign in to send supplier invitations.', variant: 'destructive' });
+        return;
+      }
+
+      const invite = await createAndSyncSupplierInvitation(
+        user.id,
         event,
         bundle.supplierName,
         bundle.supplierEmail,
         lineItemIds,
-        supplierMessages[bundle.supplierKey] || ''
+        supplierMessages[bundle.supplierKey] || '',
       );
-      updateBatchStatus(batch.id, 'SENT');
-
-      // Sync to Supabase so supplier can open portal on any device. This has to succeed before
-      // the email goes out - the email's portal link and the authenticated supplier's dashboard
-      // both read from this row, so sending the email after a failed sync would hand the
-      // supplier a link to data that was never written.
-      const synced = user?.id ? await syncRFQBatch(user.id, batch, getItemsForBatch(batch.id), event) : false;
-      if (user?.id && synced) {
-        syncBatchStatus(batch.id, 'SENT', user.id);
-      }
-      if (!synced) {
+      if (!invite.ok || !invite.batch) {
         toast({
-          title: 'Could not send request',
-          description: 'The request was saved locally but failed to sync - please try again in a moment.',
+          title: 'Invitation failed',
+          description: invite.error || 'Could not create the supplier invitation.',
           variant: 'destructive',
         });
         return;
       }
+      const batch = invite.batch;
 
-      // Send bundled email via edge function
+      // Email is best-effort — the invitation already exists in the supplier UI
       try {
         await supabase.functions.invoke('send-rfq-email', {
           body: {
@@ -190,17 +186,14 @@ const SupplierQuoteReview: React.FC<SupplierQuoteReviewProps> = ({ event, onClos
             coordinatorPhone: '',
           },
         });
-        toast({
-          title: 'Quote Request Sent',
-          description: `Bundled RFQ with ${bundledItems.length} items sent to ${bundle.supplierName}`,
-        });
       } catch (emailErr) {
         console.warn('Email send failed:', emailErr);
-        toast({
-          title: 'RFQ Batch Created',
-          description: `Batch saved locally. Email delivery may have failed.`,
-        });
       }
+
+      toast({
+        title: 'Invitation sent',
+        description: `${bundle.supplierName} can now see ${bundledItems.length} item${bundledItems.length === 1 ? '' : 's'} in My Invitations.`,
+      });
 
       // Update assignments status
       const assignmentIds = new Set(bundle.assignments.map(a => a.id));

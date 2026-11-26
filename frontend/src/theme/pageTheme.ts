@@ -67,6 +67,7 @@ export const THEME_PAGES = [
   { id: 'coordinator-dashboard', label: 'Events', description: 'Calendar, recent work, and the event grid' },
   { id: 'coordinator-event', label: 'Event quote', description: 'Quote form, section titles, and the summary column' },
   { id: 'coordinator-proposal', label: 'Proposal', description: 'Client-facing proposal' },
+  { id: 'supplier-dashboard', label: 'Supplier', description: 'Invitations, catalog, and portfolio' },
   { id: 'theme-studio', label: 'Theme studio', description: 'This settings page' },
 ] as const;
 

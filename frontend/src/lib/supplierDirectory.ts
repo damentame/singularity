@@ -50,7 +50,7 @@ export async function searchAppSuppliers(filters: {
     // Fetch active providers in the event's country
     const { data: providers, error } = await supabase
       .from('service_providers')
-      .select('user_id, business_name, trading_name, city, country, service_radius, selected_categories, cover_image_url')
+      .select('user_id, business_name, trading_name, contact_email, city, country, service_radius, selected_categories, cover_image_url')
       .eq('is_active', true)
       .eq('country', filters.country)
       .order('business_name');
@@ -78,7 +78,7 @@ export async function searchAppSuppliers(filters: {
         userId:        p.user_id,
         businessName:  p.business_name || p.trading_name || '',
         tradingName:   p.trading_name || '',
-        email:         emailMap[p.user_id] || '',
+        email:         emailMap[p.user_id] || p.contact_email || '',
         city:          p.city || '',
         country:       p.country || '',
         serviceRadius: p.service_radius || '',

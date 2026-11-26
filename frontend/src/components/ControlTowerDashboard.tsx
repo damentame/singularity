@@ -13,6 +13,8 @@ import {
 } from '@/contexts/EventContext';
 import { toast } from '@/components/ui/use-toast';
 import { getCurrencySymbol } from '@/data/countryConfig';
+import { useAppContext } from '@/contexts/AppContext';
+import { createAndSyncSupplierInvitation } from '@/lib/createSupplierInvitation';
 
 const GOLD = '#C9A24A';
 const makeFmt = (currency: string) => (n: number) =>
@@ -28,6 +30,7 @@ interface AssignPanelProps {
 
 const SupplierAssignPanel: React.FC<AssignPanelProps> = ({ event, lineItemId, onClose }) => {
   const { updateEvent } = useEventContext();
+  const { user } = useAppContext();
   const lineItem = event.lineItems.find(li => li.id === lineItemId);
   const assignment = (event.supplierAssignments || []).find(a => a.lineItemId === lineItemId);
   const quotes = (event.supplierQuotes || []).filter(q => assignment && q.assignmentId === assignment.id);
@@ -49,19 +52,42 @@ const SupplierAssignPanel: React.FC<AssignPanelProps> = ({ event, lineItemId, on
     id: `log-${uid()}`, eventId: event.id, action, details, actor: 'Coordinator', timestamp: now(),
   });
 
-  const handleAssign = () => {
+  const handleAssign = async () => {
     if (!name.trim()) return;
+    if (!email.trim()) {
+      toast({ title: 'Email required', description: 'Add the supplier login email so they receive the invitation.', variant: 'destructive' });
+      return;
+    }
+    if (!user?.id) {
+      toast({ title: 'Sign in required', description: 'Sign in to hire suppliers.', variant: 'destructive' });
+      return;
+    }
+
+    const invite = await createAndSyncSupplierInvitation(
+      user.id,
+      event,
+      name.trim(),
+      email.trim(),
+      [lineItemId],
+    );
+    if (!invite.ok) {
+      toast({ title: 'Invitation failed', description: invite.error || 'Could not send the supplier invitation.', variant: 'destructive' });
+      return;
+    }
+
     const id = `sa-${uid()}`;
     const sa: SupplierAssignment = {
       id, eventId: event.id, lineItemId, supplierName: name.trim(), supplierEmail: email.trim(),
-      supplierCompanyId: '', status: 'PENDING', acceptedQuoteId: '', notes: '', createdAt: now(), updatedAt: now(),
+      supplierCompanyId: '', status: 'QUOTE_RECEIVED', acceptedQuoteId: '', notes: '', createdAt: now(), updatedAt: now(),
     };
     updateEvent(event.id, {
       supplierAssignments: [...(event.supplierAssignments || []), sa],
-      lineItems: event.lineItems.map(li => li.id === lineItemId ? { ...li, supplierAssignmentId: id } : li),
-      activityLog: [...(event.activityLog || []), logAction('SUPPLIER_ASSIGNED', `${name.trim()} assigned to ${lineItem.name}`)],
+      lineItems: event.lineItems.map(li => li.id === lineItemId
+        ? { ...li, supplierAssignmentId: id, rfqSent: true, rfqJobCode: event.quoteNumber || event.jobCode }
+        : li),
+      activityLog: [...(event.activityLog || []), logAction('SUPPLIER_INVITED', `${name.trim()} invited for ${lineItem.name}`)],
     });
-    toast({ title: 'Supplier Assigned', description: `${name.trim()} assigned to ${lineItem.name}` });
+    toast({ title: 'Invitation sent', description: `${name.trim()} can see "${lineItem.name}" in My Invitations.` });
   };
 
   const handleAddQuote = () => {
