@@ -589,7 +589,7 @@ export const corporateCategories: ServiceCategory[] = [
   },
 ];
 
-// Social Event Categories
+// Celebration Categories
 export const socialCategories: ServiceCategory[] = [
   {
     id: 'party-venues',
@@ -641,8 +641,8 @@ export const eventTypeCategories: EventTypeCategory[] = [
     categories: corporateCategories,
   },
   {
-    id: 'social',
-    name: 'Social Events',
+    id: 'celebrations',
+    name: 'Celebrations',
     description: 'Services for parties, celebrations, and gatherings',
     categories: socialCategories,
   },

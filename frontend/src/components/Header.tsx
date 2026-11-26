@@ -1,6 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '@/contexts/AppContext';
-import { Menu, X, Heart, LogOut, LayoutDashboard, ChevronDown, Briefcase, Home, UserCircle } from 'lucide-react';
+import { Menu, X, Heart, LogOut, LayoutDashboard, ChevronDown, Briefcase, Home, UserCircle, MessageCircle } from 'lucide-react';
+import { getUnreadCountsForSupplier } from '@/lib/rfqMessagesApi';
+import { getMyInvitations } from '@/lib/supplierRfqApi';
+
+const MESSAGE_BADGE_POLL_MS = 30000;
 
 const Header: React.FC = () => {
   const {
@@ -18,6 +22,22 @@ const Header: React.FC = () => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [supplierUnread, setSupplierUnread] = useState(0);
+  const [supplierNeedsResponse, setSupplierNeedsResponse] = useState(0);
+
+  // Global attention badges for suppliers - independent of whatever view is currently
+  // mounted, since Provider Hub's own badge (SupplierShell) only polls while that view itself
+  // is on screen, and these icons need to stay accurate from anywhere in the app.
+  useEffect(() => {
+    if (!isAuthenticated || user?.role !== 'supplier') { setSupplierUnread(0); setSupplierNeedsResponse(0); return; }
+    const load = () => Promise.all([getUnreadCountsForSupplier(), getMyInvitations()]).then(([counts, invitations]) => {
+      setSupplierUnread(Object.values(counts).reduce((a, b) => a + b, 0));
+      setSupplierNeedsResponse(invitations.filter(i => !i.batch.invitationResponse).length);
+    });
+    load();
+    const interval = setInterval(load, MESSAGE_BADGE_POLL_MS);
+    return () => clearInterval(interval);
+  }, [isAuthenticated, user?.role]);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -53,7 +73,7 @@ const Header: React.FC = () => {
       ? [{ label: 'Dashboard', view: 'dashboard' as const, icon: LayoutDashboard }]
       : []),
     ...(isAuthenticated && user?.role === 'supplier'
-      ? [{ label: 'Provider Hub', view: 'provider-dashboard' as const, icon: Briefcase }]
+      ? [{ label: 'Provider Hub', view: 'provider-dashboard' as const, icon: Briefcase, highlight: true }]
       : []),
   ];
 
@@ -133,19 +153,45 @@ const Header: React.FC = () => {
           <div className="hidden md:flex items-center space-x-5">
             {isAuthenticated ? (
               <>
-                {/* Wishlist */}
+                {/* Wishlist (host/coordinator) or My Invitations - every RFQ a supplier has been sent,
+                    same destination as "Provider Hub" (goes straight to the full list, not just the
+                    ones they've accepted - a pending invitation needing a response must never be a
+                    dead end behind this icon). */}
                 <button
-                  onClick={() => setCurrentView('dashboard')}
+                  onClick={() => setCurrentView(user?.role === 'supplier' ? 'provider-dashboard' : 'dashboard')}
                   className="relative p-2 hover:text-gold transition-colors"
                   style={{ color: '#FFFFFF' }}
+                  title={user?.role === 'supplier' ? 'My Invitations' : 'Wishlist'}
                 >
                   <Heart className="w-5 h-5" />
-                  {wishlist.length > 0 && (
+                  {user?.role === 'supplier' && supplierNeedsResponse > 0 && (
+                    <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs font-medium rounded-full flex items-center justify-center">
+                      {supplierNeedsResponse}
+                    </span>
+                  )}
+                  {user?.role !== 'supplier' && wishlist.length > 0 && (
                     <span className="absolute -top-1 -right-1 w-5 h-5 bg-gold text-[#0B1426] text-xs font-medium rounded-full flex items-center justify-center">
                       {wishlist.length}
                     </span>
                   )}
                 </button>
+
+                {/* Messages - a unified inbox across every RFQ conversation, for suppliers and coordinators */}
+                {(user?.role === 'supplier' || user?.role === 'coordinator') && (
+                  <button
+                    onClick={() => setCurrentView(user?.role === 'supplier' ? 'supplier-messages' : 'coordinator-messages')}
+                    className="relative p-2 hover:text-gold transition-colors"
+                    style={{ color: '#FFFFFF' }}
+                    title="Messages"
+                  >
+                    <MessageCircle className="w-5 h-5" />
+                    {user?.role === 'supplier' && supplierUnread > 0 && (
+                      <span className="absolute -top-1 -right-1 w-5 h-5 bg-gold text-[#0B1426] text-xs font-medium rounded-full flex items-center justify-center">
+                        {supplierUnread}
+                      </span>
+                    )}
+                  </button>
+                )}
 
                 {/* User Menu */}
                 <div className="relative">

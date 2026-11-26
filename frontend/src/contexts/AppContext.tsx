@@ -53,7 +53,7 @@ export interface Conversation {
   unreadCount: number;
 }
 
-export type ViewType = 'home' | 'browse' | 'search-providers' | 'supplier' | 'dashboard' | 'budget' | 'checklist' | 'guests' | 'seating' | 'weather' | 'accommodation' | 'supplier-upload' | 'wizard' | 'workbook' | 'moodboard' | 'service-provider-registration' | 'provider-dashboard' | 'planner-dashboard' | 'event-detail' | 'event-proposal' | 'role-selector' | 'coordinator-dashboard' | 'coordinator-event' | 'coordinator-proposal' | 'theme-studio' | 'profile' | 'reset-password';
+export type ViewType = 'home' | 'browse' | 'search-providers' | 'supplier' | 'dashboard' | 'budget' | 'checklist' | 'guests' | 'seating' | 'weather' | 'accommodation' | 'supplier-upload' | 'wizard' | 'workbook' | 'moodboard' | 'service-provider-registration' | 'provider-dashboard' | 'planner-dashboard' | 'event-detail' | 'event-proposal' | 'role-selector' | 'coordinator-dashboard' | 'coordinator-event' | 'coordinator-proposal' | 'theme-studio' | 'profile' | 'reset-password' | 'supplier-messages' | 'coordinator-messages';
 
 // Views that require the user to be authenticated.
 // Public views: home, browse, search-providers, supplier, reset-password
@@ -63,6 +63,7 @@ export const PROTECTED_VIEWS = new Set<ViewType>([
   'workbook', 'moodboard', 'service-provider-registration', 'provider-dashboard',
   'planner-dashboard', 'event-detail', 'event-proposal',
   'coordinator-dashboard', 'coordinator-event', 'coordinator-proposal', 'theme-studio',
+  'supplier-messages', 'coordinator-messages',
 ]);
 
 // Service Provider Registration Data
@@ -111,7 +112,7 @@ interface AppContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
-  signup: (email: string, password: string, name: string, role: 'host' | 'supplier' | 'coordinator', eventType?: string) => Promise<{ success: boolean; error?: string }>;
+  signup: (email: string, password: string, name: string, role: 'host' | 'supplier' | 'coordinator', eventType?: string, companyName?: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   routeToRoleDashboard: (role: string) => void;
   switchRole: (newRole: 'host' | 'supplier' | 'coordinator') => Promise<boolean>;
@@ -279,6 +280,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Track whether we've already auto-routed on session restore
   const hasAutoRouted = useRef(false);
+
+  // signup()/login() below and the SIGNED_IN branch of onAuthStateChange both react to the
+  // same supabase.auth.signUp()/signInWithPassword() call - establishing the session fires
+  // SIGNED_IN before signup()'s own code has had a chance to upsert the profiles row, so the
+  // listener can read no profile yet and fall back to buildUserFromProfile's default role
+  // ('host'), silently overwriting whatever correct role signup() just set. Suppress the
+  // listener's own read-and-set while one of these is actively running its own (slower but
+  // correct, since it already has the role in hand) path.
+  const isAuthenticating = useRef(false);
 
   // Derived state
   const selectedSupplier = useMemo(() => {
@@ -464,6 +474,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
 
       if (event === 'SIGNED_IN' && session?.user) {
+        if (isAuthenticating.current) return;
         const userId = session.user.id;
         const sessionUser = session.user;
         setTimeout(async () => {
@@ -511,6 +522,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [wishlist]);
 
   const login = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
+    isAuthenticating.current = true;
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
         email: email.trim(),
@@ -594,6 +606,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         variant: 'destructive',
       });
       return { success: false, error: msg };
+    } finally {
+      isAuthenticating.current = false;
     }
   };
 
@@ -602,8 +616,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     password: string,
     name: string,
     role: 'host' | 'supplier' | 'coordinator',
-    eventType?: string
+    eventType?: string,
+    companyName?: string
   ): Promise<{ success: boolean; error?: string }> => {
+    isAuthenticating.current = true;
     try {
       const trimmedEmail = email.trim();
       const { data, error } = await supabase.auth.signUp({
@@ -640,6 +656,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             role,
             available_roles: [role],
             event_type: eventType || null,
+            company_name: companyName || null,
           });
           if (profileError) {
             console.warn('Profile creation warning:', profileError.message);
@@ -657,6 +674,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             role,
             eventType,
             availableRoles: [role],
+            companyName,
           };
           setUser(newUser);
 
@@ -692,6 +710,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         variant: 'destructive',
       });
       return { success: false, error: msg };
+    } finally {
+      isAuthenticating.current = false;
     }
   };
 

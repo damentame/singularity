@@ -3,6 +3,7 @@ import { useEventContext, PlannerEvent } from '@/contexts/EventContext';
 import { useEventPersistence, SyncState } from '@/hooks/useEventPersistence';
 import { useAppContext } from '@/contexts/AppContext';
 import { supabase } from '@/lib/supabase';
+import { buildEventContext, refreshEventContextForEvent } from '@/lib/rfqSupabaseSync';
 
 // ─── Auto-Save Status Context ────────────────────────────────────────────────
 
@@ -82,6 +83,8 @@ export const EventAutoSaveProvider: React.FC<{ children: React.ReactNode }> = ({
   const eventsRef = useRef(events);
   const calcRef = useRef(calculateSummary);
   const lastSavedHashRef = useRef<string>('');
+  // eventId -> the supplier-facing snapshot last pushed to that event's RFQ batches
+  const pushedContextRef = useRef<Map<string, string>>(new Map());
   const [localLastSave, setLocalLastSave] = useState<string | null>(null);
   const [isLoadingRemote, setIsLoadingRemote] = useState(false);
   const prevEventIdsRef = useRef<Set<string>>(new Set(events.map(e => e.id)));
@@ -141,6 +144,18 @@ export const EventAutoSaveProvider: React.FC<{ children: React.ReactNode }> = ({
     return evts.map(e => `${e.id}:${e.updatedAt}`).join('|');
   }, []);
 
+  // Keep invited suppliers' view of each event current. Only events whose supplier-facing
+  // fields actually changed are pushed, so ordinary edits (line items, notes) cost nothing.
+  // The first save of a session pushes every event once, which also backfills batches
+  // whose snapshot predates fields added to buildEventContext.
+  const pushSupplierContexts = async (userId: string, evts: PlannerEvent[]) => {
+    for (const e of evts) {
+      const snapshot = JSON.stringify(buildEventContext(e));
+      if (pushedContextRef.current.get(e.id) === snapshot) continue;
+      if (await refreshEventContextForEvent(userId, e)) pushedContextRef.current.set(e.id, snapshot);
+    }
+  };
+
   // Core save function
   const doSave = useCallback(async () => {
     const currentEvents = eventsRef.current;
@@ -153,8 +168,9 @@ export const EventAutoSaveProvider: React.FC<{ children: React.ReactNode }> = ({
     if (success) {
       lastSavedHashRef.current = hash;
       setLocalLastSave(new Date().toISOString());
+      if (user?.id) pushSupplierContexts(user.id, currentEvents);
     }
-  }, [saveAllEvents, getEventsHash]);
+  }, [saveAllEvents, getEventsHash, user?.id]);
 
   // Debounced save on events change
   useEffect(() => {

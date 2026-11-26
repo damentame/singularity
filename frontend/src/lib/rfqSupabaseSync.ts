@@ -3,7 +3,7 @@
 // so the supplier can access the data cross-device via their portal link.
 
 import { supabase } from '@/lib/supabase';
-import { RFQBatch, RFQBatchItem, RFQBatchStatus, PlannerEvent, SupplierQuoteVersion } from '@/contexts/EventContext';
+import { RFQBatch, RFQBatchItem, RFQBatchStatus, PlannerEvent, SupplierQuoteVersion, EVENT_TYPE_LABELS } from '@/contexts/EventContext';
 import {
   applyInvitationResponseFromSupabase,
   upsertBatchFromSupabase,
@@ -22,6 +22,9 @@ export function buildEventContext(event: PlannerEvent): Record<string, any> {
       id: m.id,
       name: m.name,
       venueSpaceId: m.venueSpaceId || '',
+      date: m.date || '',
+      startTime: m.startTime || '',
+      endTime: m.endTime || '',
     })),
     venueSpaces: (event.venueSpaces || []).map(s => ({
       id: s.id,
@@ -29,19 +32,68 @@ export function buildEventContext(event: PlannerEvent): Record<string, any> {
     })),
     city: event.city || event.location || '',
     country: event.country || '',
+    region: event.region || '',
     date: event.date || '',
+    endDate: event.endDate || '',
+    setupDays: event.setupDays || 0,
+    strikeDays: event.strikeDays || 0,
+    eventType: EVENT_TYPE_LABELS[event.eventType] || '',
+    venue: event.venue || '',
+    guestCount: event.guestCount || 0,
     quoteNumber: event.quoteNumber || '',
   };
 }
 
-// Upsert the batch and its items to Supabase.
-// Fire-and-forget: errors are logged but don't break the coordinator's flow.
+// The event_context snapshot is otherwise only written when a batch is first created, so
+// any later edit to the event (date, venue, guest count...) never reached the supplier.
+// Called after the coordinator's event autosave to re-push the snapshot onto every open
+// batch for that event. Merges over the stored snapshot rather than replacing it, so keys
+// written by other flows (e.g. a general enquiry's budgetRange) survive.
+export async function refreshEventContextForEvent(userId: string, event: PlannerEvent): Promise<boolean> {
+  try {
+    const { data, error } = await supabase
+      .from('rfq_batches')
+      .select('id, event_context')
+      .eq('event_id', event.id)
+      .eq('user_id', userId)
+      .neq('status', 'CANCELLED');
+    if (error) {
+      console.warn('refreshEventContextForEvent: batch lookup failed', error.message);
+      return false;
+    }
+    if (!data || data.length === 0) return true;
+
+    const fresh = buildEventContext(event);
+    const results = await Promise.all(data.map(row =>
+      supabase
+        .from('rfq_batches')
+        .update({ event_context: { ...(row.event_context || {}), ...fresh } })
+        .eq('id', row.id),
+    ));
+    const failed = results.find(r => r.error);
+    if (failed?.error) {
+      console.warn('refreshEventContextForEvent: update failed', failed.error.message);
+      return false;
+    }
+    return true;
+  } catch (err: any) {
+    console.warn('refreshEventContextForEvent error:', err.message);
+    return false;
+  }
+}
+
+// Upsert the batch and its items to Supabase. The batch always exists locally regardless of
+// outcome (rfqStore already wrote it) - this is specifically about whether the supplier's own
+// account will be able to see it, which depends entirely on this write succeeding. Callers
+// should surface a failure here rather than reporting the invite as sent, since a local-only
+// batch with no backend row is invisible to an authenticated supplier no matter how correct
+// the email on it is.
 export async function syncRFQBatch(
   userId: string,
   batch: RFQBatch,
   batchItems: RFQBatchItem[],
   event: PlannerEvent,
-): Promise<void> {
+): Promise<boolean> {
   try {
     const { error: batchError } = await supabase.from('rfq_batches').upsert({
       id:                             batch.id,
@@ -67,7 +119,7 @@ export async function syncRFQBatch(
       throw new Error(batchError.message);
     }
 
-    if (batchItems.length === 0) return;
+    if (batchItems.length === 0) return true;
 
     const rows = batchItems.map(bi => ({
       id:                           bi.id,
@@ -92,6 +144,7 @@ export async function syncRFQBatch(
       console.warn('syncRFQBatch: items upsert failed', itemsError.message);
       throw new Error(itemsError.message);
     }
+    return true;
   } catch (err: any) {
     console.warn('syncRFQBatch error:', err.message);
     throw err;

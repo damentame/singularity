@@ -42,12 +42,17 @@ declare global {
 
 // Local response handler for common queries
 const getLocalResponse = (
-  transcript: string, 
+  transcript: string,
   setCurrentView: (view: string) => void,
   setShowAuthModal: (show: boolean) => void,
-  setAuthMode: (mode: 'login' | 'signup') => void
+  setAuthMode: (mode: 'login' | 'signup') => void,
+  role?: 'host' | 'supplier' | 'coordinator'
 ): { response: string; action?: () => void } => {
   const text = transcript.toLowerCase().trim();
+  // This assistant was built wedding-planning-first, so most destinations below are host-only.
+  // "Dashboard" is the one every role has a version of - route to whichever one actually
+  // belongs to this user instead of always sending them to the host's.
+  const dashboardViewForRole = role === 'coordinator' ? 'coordinator-dashboard' : role === 'supplier' ? 'provider-dashboard' : 'dashboard';
   
   // Navigation commands
   if (text.includes('venue') || text.includes('venues') || text.includes('find venue')) {
@@ -102,7 +107,7 @@ const getLocalResponse = (
   if (text.includes('dashboard') || text.includes('home') || text.includes('main')) {
     return {
       response: "Taking you to your dashboard where you can see an overview of your event planning progress.",
-      action: () => setTimeout(() => setCurrentView('dashboard'), 1000)
+      action: () => setTimeout(() => setCurrentView(dashboardViewForRole), 1000)
     };
   }
   
@@ -331,10 +336,11 @@ const VoiceAssistant: React.FC = () => {
     
     // Use local response handler (no edge function dependency)
     const { response, action } = getLocalResponse(
-      text, 
-      setCurrentView, 
-      setShowAuthModal, 
-      setAuthMode
+      text,
+      setCurrentView,
+      setShowAuthModal,
+      setAuthMode,
+      user?.role
     );
     
     // Small delay to simulate processing

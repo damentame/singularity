@@ -1,14 +1,18 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, MessageCircle, Check, X, Loader2, Send, Package } from 'lucide-react';
+import { ArrowLeft, MessageCircle, Check, X, Loader2, Send, Package, CalendarDays } from 'lucide-react';
 import { getPortalDataForBatch, saveQuoteForBatch, PortalData } from '@/lib/rfqPortalApi';
 import { respondToInvitation } from '@/lib/supplierRfqApi';
 import { sendSystemMessage } from '@/lib/rfqMessagesApi';
 import { RFQ_BATCH_STATUS_LABELS, RFQ_BATCH_STATUS_COLORS, SupplierQuoteVersionItem } from '@/contexts/EventContext';
-import { getCurrencySymbol, formatCurrency } from '@/data/countryConfig';
+import { getCurrencySymbol, formatCurrency, COUNTRY_FINANCE_CONFIGS } from '@/data/countryConfig';
 import { useAppContext } from '@/contexts/AppContext';
 import { toast } from '@/components/ui/use-toast';
 import RFQMessageThread from '@/components/RFQMessageThread';
 import { GOLD, MUTED, TEXT, glassCard } from './supplierUi';
+import {
+  AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogAction, AlertDialogCancel,
+} from '@/components/ui/alert-dialog';
 
 interface SupplierInvitationDetailProps {
   batchId: string;
@@ -29,6 +33,9 @@ const emptyDraft = (defaultIncVat: boolean): ItemDraft => ({
 const formatDate = (date: string) =>
   date ? new Date(date + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }) : 'Date TBC';
 
+// event_context stores the country as an ISO code (e.g. "ZA"), not a display name.
+const countryName = (iso: string) => COUNTRY_FINANCE_CONFIGS.find(c => c.countryIso === iso)?.countryName || iso;
+
 const SupplierInvitationDetail: React.FC<SupplierInvitationDetailProps> = ({ batchId, onBack }) => {
   const { user } = useAppContext();
   const [data, setData] = useState<PortalData | null>(null);
@@ -38,6 +45,7 @@ const SupplierInvitationDetail: React.FC<SupplierInvitationDetailProps> = ({ bat
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
   const [showMessages, setShowMessages] = useState(false);
+  const [confirmWithdraw, setConfirmWithdraw] = useState(false);
 
   const load = async () => {
     const result = await getPortalDataForBatch(batchId);
@@ -95,6 +103,23 @@ const SupplierInvitationDetail: React.FC<SupplierInvitationDetailProps> = ({ bat
         title: response === 'accepted' ? 'Invitation accepted' : 'Invitation declined',
         description: 'The coordinator has been notified.',
       });
+      await load();
+    } else {
+      toast({ title: 'Something went wrong', variant: 'destructive' });
+    }
+    setResponding(false);
+  };
+
+  // Distinct from decline/undo above: withdrawing means the supplier already said yes (and may
+  // have already quoted), so unlike a plain accept/decline, the coordinator may be counting on
+  // this - worth an explicit chat notice, same as the coordinator-cancels-a-request notice.
+  const handleWithdraw = async () => {
+    setConfirmWithdraw(false);
+    setResponding(true);
+    const ok = await respondToInvitation(batchId, 'withdrawn');
+    if (ok) {
+      sendSystemMessage(batchId, '⚠️ The supplier has withdrawn from this request.');
+      toast({ title: 'Withdrawn', description: 'The coordinator has been notified in your chat thread.' });
       await load();
     } else {
       toast({ title: 'Something went wrong', variant: 'destructive' });
@@ -166,6 +191,22 @@ const SupplierInvitationDetail: React.FC<SupplierInvitationDetailProps> = ({ bat
 
   const { batch, batchItems } = data;
 
+  // Older batches carry a snapshot from before these fields existed - each row only renders
+  // when its field is present, so they degrade to whatever the snapshot has.
+  const dateRange = ctx.endDate && ctx.endDate !== ctx.date ? `${formatDate(ctx.date)} – ${formatDate(ctx.endDate)}` : formatDate(ctx.date);
+  const fullLocation = [ctx.venue, ctx.city, ctx.region, ctx.country && countryName(ctx.country)].filter(Boolean).join(', ');
+  const scheduledMoments = batch.includeMomentSpaceContext
+    ? (ctx.moments || []).filter((m: any) => m.date || m.startTime)
+    : [];
+  const eventDetailRows: Array<[string, string]> = [
+    ['Event type', ctx.eventType || ''],
+    ['Date', ctx.date ? dateRange : ''],
+    ['Venue', fullLocation],
+    ['Guests', ctx.guestCount ? String(ctx.guestCount) : ''],
+    ['Setup', ctx.setupDays ? `${ctx.setupDays} day${ctx.setupDays !== 1 ? 's' : ''} before` : ''],
+    ['Breakdown', ctx.strikeDays ? `${ctx.strikeDays} day${ctx.strikeDays !== 1 ? 's' : ''} after` : ''],
+  ].filter(([, v]) => v) as Array<[string, string]>;
+
   return (
     <div className="space-y-5">
       <button onClick={onBack} className="flex items-center gap-1.5 text-xs transition-colors" style={{ color: MUTED }}>
@@ -179,7 +220,7 @@ const SupplierInvitationDetail: React.FC<SupplierInvitationDetailProps> = ({ bat
               {ctx.quoteNumber || 'Quote Request'}
             </h2>
             <p className="text-xs mt-1" style={{ color: MUTED }}>
-              {formatDate(ctx.date)} · {[ctx.city, ctx.country].filter(Boolean).join(', ') || 'Location TBC'}
+              {formatDate(ctx.date)} · {[ctx.city, ctx.country && countryName(ctx.country)].filter(Boolean).join(', ') || 'Location TBC'}
             </p>
           </div>
           <div className="flex flex-col items-end gap-1.5">
@@ -219,6 +260,87 @@ const SupplierInvitationDetail: React.FC<SupplierInvitationDetailProps> = ({ bat
         </button>
       </div>
 
+      {/* Event logistics - shown in every response state, and kept current by the coordinator's
+          autosave (refreshEventContextForEvent), so later edits to the event reach the supplier.
+          General enquiries have no items and show their own Enquiry Details card below instead. */}
+      {batchItems.length > 0 && (eventDetailRows.length > 0 || scheduledMoments.length > 0) && (
+        <div className="rounded-2xl p-6" style={glassCard}>
+          <h3 className="text-[10px] font-semibold uppercase tracking-[0.15em] mb-3" style={{ color: GOLD }}>
+            <CalendarDays className="w-3.5 h-3.5 inline mr-1.5" /> Event Details
+          </h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+            {eventDetailRows.map(([label, value]) => (
+              <div key={label}><span className="text-gray-400">{label}: </span><span style={{ color: TEXT }}>{value}</span></div>
+            ))}
+          </div>
+          {scheduledMoments.length > 0 && (
+            <div className="mt-4 space-y-1.5">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Schedule</p>
+              {scheduledMoments.map((m: any) => (
+                <div key={m.id} className="flex items-center justify-between gap-2 text-xs">
+                  <span style={{ color: TEXT }}>{m.name}</span>
+                  <span className="text-gray-400 flex-shrink-0">
+                    {[m.date && formatDate(m.date), [m.startTime, m.endTime].filter(Boolean).join('–')].filter(Boolean).join(' · ')}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* What's actually being requested - shown regardless of response status, so the supplier
+          can see what they'd be quoting on before deciding, not just an Accept/Decline prompt
+          with no context behind it. The post-accept pricing form below repeats item names/qty
+          next to their price fields, so this is skipped once accepted to avoid showing it twice. */}
+      {batchItems.length > 0 && batch.invitationResponse !== 'accepted' && (
+        <div className="rounded-2xl p-6" style={glassCard}>
+          <h3 className="text-[10px] font-semibold uppercase tracking-[0.15em] mb-4" style={{ color: GOLD }}>
+            <Package className="w-3.5 h-3.5 inline mr-1.5" /> Items Requested ({batchItems.length})
+          </h3>
+          <div className="space-y-2">
+            {batchItems.map(bi => {
+              const moment = batch.includeMomentSpaceContext ? (ctx.moments || []).find((m: any) => m.id === bi.momentIdSnapshot) : null;
+              const space = batch.includeMomentSpaceContext ? (ctx.venueSpaces || []).find((s: any) => s.id === bi.spaceIdSnapshot) : null;
+              const locationLabel = [moment?.name, space?.name].filter(Boolean).join(' · ');
+              return (
+                <div key={bi.id} className="p-3 rounded-xl" style={{ backgroundColor: 'color-mix(in srgb, var(--pt-surface, #FFFCF7) 70%, transparent)' }}>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-medium" style={{ color: TEXT }}>{bi.itemNameSnapshot}</span>
+                    <span className="text-[10px] text-gray-400 flex-shrink-0">Qty: {bi.qtySnapshot}</span>
+                  </div>
+                  <div className="flex items-center gap-2 mt-1 flex-wrap">
+                    {bi.categorySnapshot && <span className="text-[9px] text-gray-400">{bi.categorySnapshot}</span>}
+                    {locationLabel && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500">{locationLabel}</span>}
+                  </div>
+                  {bi.itemNotesSnapshot && <p className="text-[10px] text-gray-400 mt-1.5">{bi.itemNotesSnapshot}</p>}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {batchItems.length === 0 && (ctx.eventType || ctx.guestCount || ctx.budgetRange || (ctx.servicesRequested || []).length > 0) && (
+        <div className="rounded-2xl p-6" style={glassCard}>
+          <h3 className="text-[10px] font-semibold uppercase tracking-[0.15em] mb-3" style={{ color: GOLD }}>Enquiry Details</h3>
+          <div className="grid grid-cols-2 gap-3 text-xs">
+            {ctx.eventType && (
+              <div><span className="text-gray-400">Event type: </span><span style={{ color: TEXT }}>{ctx.eventType}</span></div>
+            )}
+            {!!ctx.guestCount && (
+              <div><span className="text-gray-400">Guests: </span><span style={{ color: TEXT }}>{ctx.guestCount}</span></div>
+            )}
+            {ctx.budgetRange && (
+              <div><span className="text-gray-400">Budget: </span><span style={{ color: TEXT }}>{ctx.budgetRange}</span></div>
+            )}
+            {(ctx.servicesRequested || []).length > 0 && (
+              <div className="col-span-2"><span className="text-gray-400">Services requested: </span><span style={{ color: TEXT }}>{(ctx.servicesRequested || []).join(', ')}</span></div>
+            )}
+          </div>
+        </div>
+      )}
+
       {!batch.invitationResponse && batch.status !== 'CANCELLED' && (
         <div className="rounded-2xl p-6" style={glassCard}>
           <p className="text-xs mb-3" style={{ color: MUTED }}>Will you quote on this request?</p>
@@ -240,9 +362,9 @@ const SupplierInvitationDetail: React.FC<SupplierInvitationDetailProps> = ({ bat
         </div>
       )}
 
-      {batch.invitationResponse === 'declined' ? (
+      {batch.invitationResponse === 'declined' && (
         <div className="rounded-2xl p-6 text-center" style={glassCard}>
-          <p className="text-xs" style={{ color: MUTED }}>You declined this invitation.</p>
+          <p className="text-xs text-gray-400">You declined this invitation.</p>
           <button
             type="button" disabled={responding} onClick={() => handleRespond('accepted')}
             className="mt-3 text-xs font-medium disabled:opacity-50"
@@ -251,7 +373,40 @@ const SupplierInvitationDetail: React.FC<SupplierInvitationDetailProps> = ({ bat
             Changed your mind? Accept instead
           </button>
         </div>
-      ) : (
+      )}
+
+      {batch.invitationResponse === 'withdrawn' && (
+        <div className="rounded-2xl p-6 text-center" style={glassCard}>
+          <p className="text-xs text-gray-400">You withdrew from this request.</p>
+          {!isLocked && (
+            <button
+              type="button" disabled={responding} onClick={() => handleRespond('accepted')}
+              className="mt-3 text-xs font-medium disabled:opacity-50"
+              style={{ color: GOLD }}
+            >
+              Changed your mind? Resume quoting
+            </button>
+          )}
+        </div>
+      )}
+
+      {batch.invitationResponse === 'accepted' && batchItems.length === 0 && (
+        <div className="rounded-2xl p-6 text-center" style={glassCard}>
+          <p className="text-xs text-gray-400">
+            Reply via the message thread above to discuss pricing, scope and availability.
+          </p>
+          {!isLocked && (
+            <button
+              type="button" disabled={responding} onClick={() => setConfirmWithdraw(true)}
+              className="mt-3 text-[10px] text-gray-400 hover:text-red-500 transition-colors"
+            >
+              Withdraw from this request
+            </button>
+          )}
+        </div>
+      )}
+
+      {batch.invitationResponse === 'accepted' && batchItems.length > 0 && (
         <div className="rounded-2xl p-6" style={glassCard}>
           <h3 className="text-[10px] font-semibold uppercase tracking-[0.15em] mb-4" style={{ color: GOLD }}>
             <Package className="w-3.5 h-3.5 inline mr-1.5" /> Items ({batchItems.length})
@@ -260,13 +415,22 @@ const SupplierInvitationDetail: React.FC<SupplierInvitationDetailProps> = ({ bat
           <div className="space-y-3">
             {batchItems.map(bi => {
               const p = prices[bi.id] || emptyDraft(true);
+              const moment = batch.includeMomentSpaceContext ? (ctx.moments || []).find((m: any) => m.id === bi.momentIdSnapshot) : null;
+              const space = batch.includeMomentSpaceContext ? (ctx.venueSpaces || []).find((s: any) => s.id === bi.spaceIdSnapshot) : null;
+              const locationLabel = [moment?.name, space?.name].filter(Boolean).join(' · ');
               return (
                 <div key={bi.id} className="p-4 rounded-xl" style={{ border: '1px solid var(--pt-border, #D4CFC6)', backgroundColor: 'color-mix(in srgb, var(--pt-surface, #FFFCF7) 75%, transparent)' }}>
                   <div className="flex items-center justify-between mb-2.5">
                     <span className="text-xs font-medium" style={{ color: TEXT }}>{bi.itemNameSnapshot}</span>
                     <span className="text-[10px]" style={{ color: MUTED }}>Qty: {bi.qtySnapshot}</span>
                   </div>
-                  {bi.itemNotesSnapshot && <p className="text-[10px] mb-2" style={{ color: MUTED }}>{bi.itemNotesSnapshot}</p>}
+                  {(bi.categorySnapshot || locationLabel) && (
+                    <div className="flex items-center gap-2 mb-2 flex-wrap">
+                      {bi.categorySnapshot && <span className="text-[9px] text-gray-400">{bi.categorySnapshot}</span>}
+                      {locationLabel && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500">{locationLabel}</span>}
+                    </div>
+                  )}
+                  {bi.itemNotesSnapshot && <p className="text-[10px] text-gray-400 mb-2">{bi.itemNotesSnapshot}</p>}
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                     <div>
                       <label className="text-[9px] uppercase tracking-wider block mb-1" style={{ color: MUTED }}>Unit Price ({currSym})</label>
@@ -352,6 +516,17 @@ const SupplierInvitationDetail: React.FC<SupplierInvitationDetailProps> = ({ bat
               </div>
             )}
           </div>
+
+          {!isLocked && (
+            <div className="mt-3 text-center">
+              <button
+                type="button" disabled={responding} onClick={() => setConfirmWithdraw(true)}
+                className="text-[10px] text-gray-400 hover:text-red-500 transition-colors"
+              >
+                Withdraw from this request
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -364,6 +539,21 @@ const SupplierInvitationDetail: React.FC<SupplierInvitationDetailProps> = ({ bat
           onClose={() => setShowMessages(false)}
         />
       )}
+
+      <AlertDialog open={confirmWithdraw} onOpenChange={setConfirmWithdraw}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Withdraw from this request?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The coordinator will be notified in your chat thread. You can resume quoting later if you change your mind.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleWithdraw} className="bg-red-500 hover:bg-red-600">Withdraw</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

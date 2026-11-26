@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   User, Building2, Mail, Phone, MapPin, Calendar, DollarSign,
   ChevronDown, ChevronRight, Heart, PartyPopper, Palette, Users,
-  Clock, Edit3, Check, X, FileText, Search, UserPlus, Repeat,
+  Clock, Edit3, Check, X, FileText, Search, UserPlus, Repeat, Plus,
 } from 'lucide-react';
 import { useEventContext, PlannerEvent, getEventDisplayName, EVENT_TYPE_LABELS } from '@/contexts/EventContext';
 import { DbClient, getClientById, getDbClientDisplayName, fetchClients, buildClientDetailsFromAccount } from '@/data/clientDbStore';
@@ -18,10 +18,34 @@ interface ClientProfilePanelProps {
 }
 
 const ClientProfilePanel: React.FC<ClientProfilePanelProps> = ({ event, onOpenEvent }) => {
-  const { events, updateEvent, calculateSummary } = useEventContext();
+  const { events, updateEvent, calculateSummary, addSubClient, removeSubClient } = useEventContext();
   const [expanded, setExpanded] = useState(true);
   const [editingNotes, setEditingNotes] = useState(false);
   const [notes, setNotes] = useState('');
+
+  // ─── Sub-clients - additional contacts, opt-in via the "+" below (never shown by default) ──
+  const [addingSubClient, setAddingSubClient] = useState(false);
+  const [subClientName, setSubClientName] = useState('');
+  const [subClientRelationship, setSubClientRelationship] = useState('');
+  const [subClientEmail, setSubClientEmail] = useState('');
+  const [subClientPhone, setSubClientPhone] = useState('');
+  const subClients = event.subClients || [];
+
+  const handleAddSubClient = () => {
+    if (!subClientName.trim()) return;
+    addSubClient(event.id, {
+      name: subClientName.trim(),
+      relationship: subClientRelationship.trim(),
+      email: subClientEmail.trim(),
+      phoneCode: '+27',
+      phone: subClientPhone.trim(),
+    });
+    setSubClientName('');
+    setSubClientRelationship('');
+    setSubClientEmail('');
+    setSubClientPhone('');
+    setAddingSubClient(false);
+  };
 
   const [clientAccount, setClientAccount] = useState<DbClient | null>(null);
   useEffect(() => {
@@ -252,6 +276,57 @@ const ClientProfilePanel: React.FC<ClientProfilePanelProps> = ({ event, onOpenEv
       {expanded && (
         <div className="border-t px-5 pb-5" style={{ borderColor: 'rgba(201,162,74,0.08)' }}>
           {clientPicker}
+
+          {/* Sub-clients - additional contacts on this quote, e.g. a co-host or second
+              decision-maker. Opt-in only: nothing shows here unless one has been added. */}
+          <div className="pt-4" onClick={(e) => e.stopPropagation()}>
+            {subClients.length > 0 && (
+              <div className="space-y-1.5 mb-2">
+                {subClients.map((sc) => (
+                  <div key={sc.id} className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg" style={{ backgroundColor: 'rgba(0,0,0,0.02)' }}>
+                    <div className="min-w-0 flex-1">
+                      <span className="text-xs font-medium" style={{ color: '#1A1A1A' }}>{sc.name}</span>
+                      {sc.relationship && <span className="text-[10px] text-gray-400 ml-1.5">· {sc.relationship}</span>}
+                      <div className="flex items-center gap-3 mt-0.5">
+                        {sc.email && <span className="text-[10px] text-gray-400 flex items-center gap-1"><Mail className="w-2.5 h-2.5" /> {sc.email}</span>}
+                        {sc.phone && <span className="text-[10px] text-gray-400 flex items-center gap-1"><Phone className="w-2.5 h-2.5" /> {sc.phoneCode} {sc.phone}</span>}
+                      </div>
+                    </div>
+                    <button onClick={() => removeSubClient(event.id, sc.id)} className="p-1 rounded-lg hover:bg-black/5 transition-colors flex-shrink-0">
+                      <X className="w-3 h-3 text-gray-300" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {addingSubClient ? (
+              <div className="p-3 rounded-xl space-y-2" style={{ backgroundColor: '#FAFAF7', border: '1px solid rgba(201,162,74,0.12)' }}>
+                <div className="grid grid-cols-2 gap-2">
+                  <input value={subClientName} onChange={(e) => setSubClientName(e.target.value)} placeholder="Name *"
+                    className="w-full px-2.5 py-1.5 rounded-lg border text-xs outline-none" style={{ borderColor: 'rgba(0,0,0,0.08)' }} autoFocus />
+                  <input value={subClientRelationship} onChange={(e) => setSubClientRelationship(e.target.value)} placeholder="Relationship (optional)"
+                    className="w-full px-2.5 py-1.5 rounded-lg border text-xs outline-none" style={{ borderColor: 'rgba(0,0,0,0.08)' }} />
+                  <input value={subClientEmail} onChange={(e) => setSubClientEmail(e.target.value)} type="email" placeholder="Email"
+                    className="w-full px-2.5 py-1.5 rounded-lg border text-xs outline-none" style={{ borderColor: 'rgba(0,0,0,0.08)' }} />
+                  <input value={subClientPhone} onChange={(e) => setSubClientPhone(e.target.value)} placeholder="Phone"
+                    className="w-full px-2.5 py-1.5 rounded-lg border text-xs outline-none" style={{ borderColor: 'rgba(0,0,0,0.08)' }} />
+                </div>
+                <div className="flex items-center justify-end gap-2">
+                  <button onClick={() => setAddingSubClient(false)} className="px-3 py-1.5 rounded-lg text-[11px] text-gray-400 hover:text-gray-600">Cancel</button>
+                  <button onClick={handleAddSubClient} disabled={!subClientName.trim()}
+                    className="px-3 py-1.5 rounded-lg text-[11px] font-medium text-white disabled:opacity-40" style={{ backgroundColor: GOLD }}>
+                    Add Contact
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button onClick={() => setAddingSubClient(true)} className="flex items-center gap-1 text-[11px] font-medium hover:opacity-70" style={{ color: GOLD }}>
+                <Plus className="w-3 h-3" /> Add another contact to this quote
+              </button>
+            )}
+          </div>
+
           {/* Client Stats Row */}
           {isReturning && (
             <div className="grid grid-cols-3 gap-3 pt-4 pb-3">

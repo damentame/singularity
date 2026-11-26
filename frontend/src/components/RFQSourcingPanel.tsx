@@ -34,6 +34,7 @@ const RFQSourcingPanel: React.FC<RFQSourcingPanelProps> = ({ event, autoOpenBatc
   const [showCreate, setShowCreate] = useState(false);
   const [supplierName, setSupplierName] = useState('');
   const [supplierEmail, setSupplierEmail] = useState('');
+  const [creating, setCreating] = useState(false);
   const [message, setMessage] = useState('');
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [expandedBatch, setExpandedBatch] = useState<string | null>(null);
@@ -102,7 +103,7 @@ const RFQSourcingPanel: React.FC<RFQSourcingPanelProps> = ({ event, autoOpenBatc
   };
 
   const handleCreate = async () => {
-    if (!supplierName.trim() || selectedItems.length === 0) return;
+    if (!supplierName.trim() || selectedItems.length === 0 || creating) return;
     if (!user?.id) {
       toast({ title: 'Sign in required', description: 'Sign in to create supplier invitations.', variant: 'destructive' });
       return;
@@ -120,15 +121,31 @@ const RFQSourcingPanel: React.FC<RFQSourcingPanelProps> = ({ event, autoOpenBatc
     const email = supplierEmail.trim();
     const items = [...selectedItems];
     const note = message.trim();
-    setSupplierName(''); setSupplierEmail(''); setMessage(''); setSelectedItems([]);
-    setShowCreate(false);
 
+    // Warn, don't block - a revised item list or a second genuine request to the same
+    // supplier for this event are both legitimate, so this is a heads-up, not a gate.
+    const emailKey = email.toLowerCase();
+    const isDuplicateInvite = getBatchesForEvent(event.id).some(
+      b => b.status !== 'CANCELLED' && b.supplierEmail.trim().toLowerCase() === emailKey
+    );
+
+    // createAndSyncSupplierInvitation only reports ok once the Supabase write has landed - a
+    // local-only batch is invisible to the supplier, so the form is kept on failure for a retry.
+    setCreating(true);
     const invite = await createAndSyncSupplierInvitation(user.id, event, name, email, items, note);
+    setCreating(false);
     setRefreshKey(k => k + 1);
 
     if (!invite.ok) {
       toast({ title: 'Invitation failed', description: invite.error || 'Could not create invitation.', variant: 'destructive' });
       return;
+    }
+
+    setSupplierName(''); setSupplierEmail(''); setMessage(''); setSelectedItems([]);
+    setShowCreate(false);
+
+    if (isDuplicateInvite) {
+      toast({ title: 'Heads up', description: `${name} already has an active request for this event.` });
     }
 
     const logEntry = {
@@ -216,16 +233,17 @@ const RFQSourcingPanel: React.FC<RFQSourcingPanelProps> = ({ event, autoOpenBatc
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-[10px] uppercase tracking-wider text-gray-400 block mb-1">Supplier Name</label>
-              <input value={supplierName} onChange={e => setSupplierName(e.target.value)} placeholder="Supplier name" className="w-full px-3 py-2 text-xs border rounded-lg bg-white" style={{ borderColor: 'rgba(201,162,74,0.2)' }} />
+              <input value={supplierName} onChange={e => setSupplierName(e.target.value)} placeholder="Supplier name" className="w-full px-3 py-2 text-xs border rounded-lg bg-white" style={{ borderColor: 'rgba(201,162,74,0.2)', color: '#1A1A1A' }} />
             </div>
             <div>
               <label className="text-[10px] uppercase tracking-wider text-gray-400 block mb-1">Supplier Email</label>
-              <input value={supplierEmail} onChange={e => setSupplierEmail(e.target.value)} placeholder="supplier@example.com" className="w-full px-3 py-2 text-xs border rounded-lg bg-white" style={{ borderColor: 'rgba(201,162,74,0.2)' }} />
+              <input value={supplierEmail} onChange={e => setSupplierEmail(e.target.value)} placeholder="supplier@example.com" className="w-full px-3 py-2 text-xs border rounded-lg bg-white" style={{ borderColor: 'rgba(201,162,74,0.2)', color: '#1A1A1A' }} />
+              <p className="text-[9px] text-gray-400 mt-1">Must match the email the supplier logs in with for it to appear in their account - the portal link below works regardless.</p>
             </div>
           </div>
           <div>
             <label className="text-[10px] uppercase tracking-wider text-gray-400 block mb-1">Message to Supplier (optional)</label>
-            <textarea value={message} onChange={e => setMessage(e.target.value)} rows={2} placeholder="Any notes for the supplier..." className="w-full px-3 py-2 text-xs border rounded-lg bg-white resize-none" style={{ borderColor: 'rgba(201,162,74,0.2)' }} />
+            <textarea value={message} onChange={e => setMessage(e.target.value)} rows={2} placeholder="Any notes for the supplier..." className="w-full px-3 py-2 text-xs border rounded-lg bg-white resize-none" style={{ borderColor: 'rgba(201,162,74,0.2)', color: '#1A1A1A' }} />
           </div>
 
           {/* Item Selection */}
@@ -254,8 +272,8 @@ const RFQSourcingPanel: React.FC<RFQSourcingPanelProps> = ({ event, autoOpenBatc
           </div>
 
           <div className="flex gap-2">
-            <button onClick={handleCreate} disabled={!supplierName.trim() || selectedItems.length === 0} className="flex-1 py-2 text-xs font-medium text-white rounded-lg disabled:opacity-40" style={{ backgroundColor: GOLD }}>
-              Create Batch ({selectedItems.length} items)
+            <button onClick={handleCreate} disabled={!supplierName.trim() || selectedItems.length === 0 || creating} className="flex-1 py-2 text-xs font-medium text-white rounded-lg disabled:opacity-40" style={{ backgroundColor: GOLD }}>
+              {creating ? 'Sending...' : `Create Batch (${selectedItems.length} items)`}
             </button>
             <button onClick={() => setShowCreate(false)} className="px-4 py-2 text-xs text-gray-400">Cancel</button>
           </div>
@@ -429,20 +447,20 @@ const RFQSourcingPanel: React.FC<RFQSourcingPanelProps> = ({ event, autoOpenBatc
               <div className="mb-3">
                 <label className="text-[10px] uppercase tracking-wider text-gray-400 block mb-1">To</label>
                 <div className="flex items-center gap-2">
-                  <input readOnly value={batch.supplierEmail} className="flex-1 px-3 py-2 text-xs border rounded-lg bg-gray-50" style={{ borderColor: '#EFEFEF' }} />
+                  <input readOnly value={batch.supplierEmail} className="flex-1 px-3 py-2 text-xs border rounded-lg bg-gray-50" style={{ borderColor: '#EFEFEF', color: '#1A1A1A' }} />
                   <button onClick={() => copyToClipboard(batch.supplierEmail)} className="p-2 rounded-lg hover:bg-gray-100"><Copy className="w-3.5 h-3.5 text-gray-400" /></button>
                 </div>
               </div>
               <div className="mb-3">
                 <label className="text-[10px] uppercase tracking-wider text-gray-400 block mb-1">Portal Link</label>
                 <div className="flex items-center gap-2">
-                  <input readOnly value={portalUrl} className="flex-1 px-3 py-2 text-xs font-mono border rounded-lg bg-gray-50" style={{ borderColor: '#EFEFEF' }} />
+                  <input readOnly value={portalUrl} className="flex-1 px-3 py-2 text-xs font-mono border rounded-lg bg-gray-50" style={{ borderColor: '#EFEFEF', color: '#1A1A1A' }} />
                   <button onClick={() => copyToClipboard(portalUrl)} className="p-2 rounded-lg hover:bg-gray-100"><Copy className="w-3.5 h-3.5 text-gray-400" /></button>
                 </div>
               </div>
               <div>
                 <label className="text-[10px] uppercase tracking-wider text-gray-400 block mb-1">Email Body</label>
-                <textarea readOnly value={emailBody} rows={10} className="w-full px-3 py-2 text-xs border rounded-lg bg-gray-50 resize-none" style={{ borderColor: '#EFEFEF' }} />
+                <textarea readOnly value={emailBody} rows={10} className="w-full px-3 py-2 text-xs border rounded-lg bg-gray-50 resize-none" style={{ borderColor: '#EFEFEF', color: '#1A1A1A' }} />
                 <button onClick={() => copyToClipboard(emailBody)} className="mt-2 flex items-center gap-1 px-3 py-1.5 text-[10px] font-medium rounded-lg" style={{ backgroundColor: GOLD, color: '#FFF' }}>
                   <Copy className="w-3 h-3" /> Copy Email Body
                 </button>

@@ -22,7 +22,6 @@ import {
   Phone,
   ChevronLeft,
   ChevronRight,
-  PartyPopper,
   Briefcase,
   Heart,
   Sparkles,
@@ -36,7 +35,6 @@ import {
 const EVENT_TYPES = [
   { id: 'weddings', label: 'Wedding', icon: Heart, color: 'from-pink-500 to-rose-500' },
   { id: 'corporate', label: 'Corporate', icon: Briefcase, color: 'from-blue-500 to-indigo-500' },
-  { id: 'social', label: 'Social', icon: PartyPopper, color: 'from-purple-500 to-violet-500' },
   { id: 'celebrations', label: 'Celebration', icon: Sparkles, color: 'from-amber-500 to-orange-500' },
 ];
 
