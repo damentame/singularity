@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, MessageCircle, Check, X, Loader2, Send, Package } from 'lucide-react';
+import { ArrowLeft, MessageCircle, Check, X, Loader2, Send, Package, CalendarDays } from 'lucide-react';
 import { getPortalDataForBatch, saveQuoteForBatch, PortalData } from '@/lib/rfqPortalApi';
 import { respondToInvitation } from '@/lib/supplierRfqApi';
 import { sendSystemMessage } from '@/lib/rfqMessagesApi';
@@ -184,6 +184,22 @@ const SupplierInvitationDetail: React.FC<SupplierInvitationDetailProps> = ({ bat
 
   const { batch, batchItems } = data;
 
+  // Older batches carry a snapshot from before these fields existed - each row only renders
+  // when its field is present, so they degrade to whatever the snapshot has.
+  const dateRange = ctx.endDate && ctx.endDate !== ctx.date ? `${formatDate(ctx.date)} – ${formatDate(ctx.endDate)}` : formatDate(ctx.date);
+  const fullLocation = [ctx.venue, ctx.city, ctx.region, ctx.country && countryName(ctx.country)].filter(Boolean).join(', ');
+  const scheduledMoments = batch.includeMomentSpaceContext
+    ? (ctx.moments || []).filter((m: any) => m.date || m.startTime)
+    : [];
+  const eventDetailRows: Array<[string, string]> = [
+    ['Event type', ctx.eventType || ''],
+    ['Date', ctx.date ? dateRange : ''],
+    ['Venue', fullLocation],
+    ['Guests', ctx.guestCount ? String(ctx.guestCount) : ''],
+    ['Setup', ctx.setupDays ? `${ctx.setupDays} day${ctx.setupDays !== 1 ? 's' : ''} before` : ''],
+    ['Breakdown', ctx.strikeDays ? `${ctx.strikeDays} day${ctx.strikeDays !== 1 ? 's' : ''} after` : ''],
+  ].filter(([, v]) => v) as Array<[string, string]>;
+
   return (
     <div className="space-y-5">
       <button onClick={onBack} className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 transition-colors">
@@ -229,6 +245,35 @@ const SupplierInvitationDetail: React.FC<SupplierInvitationDetailProps> = ({ bat
           </span>
         </button>
       </div>
+
+      {/* Event logistics - shown in every response state, and kept current by the coordinator's
+          autosave (refreshEventContextForEvent), so later edits to the event reach the supplier.
+          General enquiries have no items and show their own Enquiry Details card below instead. */}
+      {batchItems.length > 0 && (eventDetailRows.length > 0 || scheduledMoments.length > 0) && (
+        <div className="bg-white rounded-2xl border p-6" style={{ borderColor: 'rgba(201,162,74,0.15)' }}>
+          <h3 className="text-[10px] font-semibold uppercase tracking-[0.15em] mb-3" style={{ color: GOLD }}>
+            <CalendarDays className="w-3.5 h-3.5 inline mr-1.5" /> Event Details
+          </h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+            {eventDetailRows.map(([label, value]) => (
+              <div key={label}><span className="text-gray-400">{label}: </span><span style={{ color: '#1A1A1A' }}>{value}</span></div>
+            ))}
+          </div>
+          {scheduledMoments.length > 0 && (
+            <div className="mt-4 space-y-1.5">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Schedule</p>
+              {scheduledMoments.map((m: any) => (
+                <div key={m.id} className="flex items-center justify-between gap-2 text-xs">
+                  <span style={{ color: '#1A1A1A' }}>{m.name}</span>
+                  <span className="text-gray-400 flex-shrink-0">
+                    {[m.date && formatDate(m.date), [m.startTime, m.endTime].filter(Boolean).join('–')].filter(Boolean).join(' · ')}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* What's actually being requested - shown regardless of response status, so the supplier
           can see what they'd be quoting on before deciding, not just an Accept/Decline prompt
